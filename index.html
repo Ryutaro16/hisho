@@ -130,6 +130,10 @@
   .calhead { display:flex; align-items:center; gap:6px; padding:0 10px 6px; }
   .calhead h1 { font-size:22px; min-width:6.4em; } /* 1月と12月で幅が変わって › がずれないように */
   .calhead button { min-height:36px; padding:4px 12px; }
+  #dayDlg .row-btns button { white-space:nowrap; }
+  .evkind { display:flex; gap:0; margin:4px 0 6px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .evkind button { flex:1; border:0; border-radius:0; padding:8px 0; font-size:15px; background:transparent; color:var(--sub); }
+  .evkind button.on { background:var(--acc); color:#fff; font-weight:600; }
   .calhead .caladd { margin-left:auto; padding:4px 8px; font-size:14px; color:var(--acc); white-space:nowrap; }
   .calnote:has(#calStatus:empty) { display:none; }
   .cal { background:var(--card); border-top:1px solid var(--cl); user-select:none; -webkit-user-select:none; }
@@ -334,7 +338,7 @@
       <button id="calPrev" aria-label="前の月">‹</button>
       <h1 id="calTitle"></h1>
       <button id="calNext" aria-label="次の月">›</button>
-      <button id="calAdd" class="caladd" aria-label="予定を追加">＋ 予定</button>
+      <button id="calAdd" class="caladd" aria-label="予定かToDoを追加">＋ 追加</button>
       <button id="calToday">今月</button>
     </div>
     <div class="cal" id="calGrid"></div>
@@ -468,20 +472,21 @@
   <div class="muted" id="dayWorkNote"></div>
   <div class="daywork" id="dayWork"></div>
   <div id="dayList"></div>
-  <div class="row-btns"><button class="main" id="dayAdd">＋ この日に予定を追加</button><button id="dayClose">閉じる</button></div>
+  <div class="row-btns"><button class="main" id="dayAdd">＋ 予定</button><button class="main" id="dayAddTodo">＋ ToDo</button><button id="dayClose">閉じる</button></div>
 </dialog>
 
 <dialog id="evDlg" class="evform">
   <h3 id="evTitle">予定</h3>
-  <label>予定の名前<input id="evName"></label>
-  <div class="two"><label>日付<input type="date" id="evDate"></label><label>最終日(何日も続くとき)<input type="date" id="evEndDate"></label></div>
-  <div class="two"><label>開始(空なら終日)<input type="time" id="evStart"></label><label>終了<input type="time" id="evEnd"></label></div>
-  <label>場所<input id="evPlace"></label>
+  <div class="evkind" id="evKind"><button data-k="ev">📅 予定</button><button data-k="todo">✅ ToDo</button></div>
+  <label><span id="evNameLbl">予定の名前</span><input id="evName"></label>
+  <div class="two"><label><span id="evDateLbl">日付</span><input type="date" id="evDate"></label><label data-ev>最終日(何日も続くとき)<input type="date" id="evEndDate"></label></div>
+  <div class="two" data-ev><label>開始(空なら終日)<input type="time" id="evStart"></label><label>終了<input type="time" id="evEnd"></label></div>
+  <label data-ev>場所<input id="evPlace"></label>
   <label>メモ<input id="evNote"></label>
   <label id="evRepeatRow">くり返し<select id="evRepeat"><option value="">しない</option><option value="weekly">毎週(同じ曜日)</option><option value="monthly">毎月(同じ日)</option><option value="yearly">毎年(同じ月日)</option></select></label>
   <div class="muted" id="evRepeatNote" hidden>くり返しの予定です。直す・消すは、Googleカレンダーのアプリで行ってください(1回だけか、全部かを選べるため)。</div>
   <div class="row-btns"><button class="main" id="evSave">保存</button><button id="evCancel">やめる</button><button class="danger" id="evDel">削除</button></div>
-  <div class="muted">Googleカレンダーにも同じように入ります。</div>
+  <div class="muted" id="evFoot">Googleカレンダーにも同じように入ります。</div>
 </dialog>
 
 <dialog id="itemDlg" class="evform">
@@ -507,7 +512,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "371eb092cf349e3e3632492c5ca5d830f4edd707";
+const BUILD = "d0c5ac128b40284eb7f96bc974a5cb3710bda93b";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length) return;
   try {
@@ -1496,6 +1501,7 @@ async function loadCal() {
     if (calRange().start !== start) return; // 読み込み中に月を変えた
     calData = data; calLoaded = start; store.set(key, data);
     renderCal();
+    if ($("dayDlg").open && dayOpen) openDay(dayOpen); // 日付の画面を開いたまま足したとき、新しい中身で出し直す
     $("calStatus").textContent = data.tasksError ? "Googleのタスクはまだ読めません" : "";
   } catch (e) { $("calStatus").textContent = (cached ? "前回の表示です。" : "") + e.message; }
 }
@@ -1754,11 +1760,25 @@ $("dayList").addEventListener("change", async (e) => {
 });
 $("dayClose").onclick = () => $("dayDlg").close();
 $("dayAdd").onclick = () => openEvent(null, dayOpen);
+$("dayAddTodo").onclick = () => openEvent(null, dayOpen, "todo");
 $("calAdd").onclick = () => openEvent(null, ymd(new Date()));
 
 // 予定の追加・修正・削除(Googleカレンダーに書き込む)
-let evEditing = null;
-function openEvent(ev, day) {
+// 新しく足すときは、上の切り替えで「予定」か「ToDo」を選ぶ。ToDoはアプリのToDoに入り、期限があればGoogleのタスクにも入る(時刻・くり返しは付けられない)
+let evEditing = null, evKind = "ev";
+function setEvKind(k) {
+  evKind = k;
+  const todo = k === "todo";
+  for (const b of $("evKind").children) b.classList.toggle("on", b.dataset.k === k);
+  for (const el of $("evDlg").querySelectorAll("[data-ev]")) el.hidden = todo;
+  $("evRepeatRow").hidden = todo || !!evEditing;
+  $("evTitle").textContent = evEditing ? "予定を直す" : todo ? "ToDoを追加" : "予定を追加";
+  $("evNameLbl").textContent = todo ? "ToDoの名前" : "予定の名前";
+  $("evDateLbl").textContent = todo ? "期限(空なら期限なし)" : "日付";
+  $("evFoot").textContent = todo ? "ToDo一覧に入ります。期限があれば、Googleのタスクにも入ります。" : "Googleカレンダーにも同じように入ります。";
+}
+$("evKind").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setEvKind(b.dataset.k); });
+function openEvent(ev, day, kind = "ev") {
   evEditing = ev;
   $("evTitle").textContent = ev ? "予定を直す" : "予定を追加";
   $("evName").value = ev?.title || ""; $("evDate").value = ev?.date || day || "";
@@ -1769,13 +1789,16 @@ function openEvent(ev, day) {
   $("evRepeat").value = ""; $("evRepeatRow").hidden = !!ev;
   const rep = !!ev?.repeat;
   $("evRepeatNote").hidden = !rep; $("evSave").hidden = rep; $("evDel").hidden = !ev || rep;
+  $("evKind").hidden = !!ev; // 直すときは切り替えない
+  setEvKind(ev ? "ev" : kind);
   $("evDlg").showModal();
 }
-async function evDo(body, msg) {
+async function evDo(body, msg, path = "/api/calendar") {
   for (const id of ["evSave", "evDel"]) $(id).disabled = true;
   try {
-    await post("/api/calendar", body);
+    const r = await post(path, body);
     $("evDlg").close(); toast(msg);
+    if (r.warn) alert(r.warn); // ToDoがGoogleのタスクに入らなかったとき
     for (const k of Object.keys(localStorage)) if (k.startsWith("hisho:cal:")) store.del(k);
     await loadCal();
     if ($("dayDlg").open) openDay(dayOpen);
@@ -1783,6 +1806,12 @@ async function evDo(body, msg) {
   finally { for (const id of ["evSave", "evDel"]) $(id).disabled = false; }
 }
 $("evSave").onclick = () => {
+  if (evKind === "todo") {
+    const item = { title: $("evName").value.trim(), category: "ToDo", due: $("evDate").value, detail: $("evNote").value.trim() };
+    if (!item.title) { alert("ToDoの名前を入れてください"); return; }
+    evDo({ action: "add", item }, item.due ? "ToDoに入れました" : "ToDoに入れました(期限なし)", "/api/item");
+    return;
+  }
   const event = { title: $("evName").value.trim(), date: $("evDate").value, end_date: $("evEndDate").value, start: $("evStart").value, end: $("evEnd").value, place: $("evPlace").value.trim(), note: $("evNote").value.trim(), repeat: evEditing ? "" : $("evRepeat").value };
   if (!event.title || !event.date) { alert("予定の名前と日付を入れてください"); return; }
   if (event.repeat && event.end_date && event.end_date !== event.date) { alert("何日も続く予定は、くり返しにできません"); return; }
