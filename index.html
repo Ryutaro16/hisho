@@ -507,7 +507,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "5b8f34b95e6e5f398c76a8be11353c9551aaba42";
+const BUILD = "371eb092cf349e3e3632492c5ca5d830f4edd707";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length) return;
   try {
@@ -1128,6 +1128,7 @@ function rowHtml(it, mode = view) {
 }
 function group(title, items, cls = "") { return items.length ? `<div class="group"><h3 class="${cls}">${title} <small>${items.length}</small></h3>${items.map(rowHtml).join("")}</div>` : ""; }
 async function loadList() {
+  if (view === "todo") pullTasks();
   for (const b of $("chips").children) b.classList.toggle("on", b.dataset.v === view);
   const v = VIEWS.find((x) => x[0] === view) || VIEWS[0];
   $("showDone").parentElement.hidden = view === "record" || view === "goal" || view === "idea";
@@ -1304,7 +1305,20 @@ $("mdCopy").onclick = async () => {
 
 // ---- 🏠 ホーム(一画面で見渡す) ----
 function openList(v) { view = v; store.set("hisho:view", view); showPage("pageList"); }
+// Googleのアプリで作った・直したタスクを ToDo に取り込む(裏で。1分に1回まで)。変わったら今の画面を読み直す
+let pulledAt = 0;
+async function pullTasks() {
+  if (Date.now() - pulledAt < 60e3) return;
+  pulledAt = Date.now();
+  try {
+    const r = await post("/api/item", { action: "pullTasks" });
+    if (!r.added && !r.changed) return;
+    if (curPage === "pageHome") loadHome(); else if (curPage === "pageList") loadList(); else if (curPage === "pageCal") loadCal();
+    if (r.added) toast(`Googleのタスクを${r.added}件 ToDo に入れました`);
+  } catch { /* つながらないときは次の機会に */ }
+}
 async function loadHome() {
+  pullTasks();
   const d = new Date();
   $("homeDate").textContent = `${d.getMonth() + 1}月${d.getDate()}日(${WEEK[d.getDay()]})`;
   if (!$("home").children.length) $("home").innerHTML = `<div class="muted">読み込み中…</div>`;
@@ -1455,6 +1469,7 @@ function renderCal() {
   renderCalList();
 }
 async function loadCal() {
+  pullTasks();
   const { start, end } = calRange();
   // 勤務日数は前の月の16日から数えるので、そこから読む(表示は start から)
   const from = ymd(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, Math.min(31, ...Object.values(WORK).map((w) => w.close)) + 1));
