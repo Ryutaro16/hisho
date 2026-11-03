@@ -1,0 +1,1941 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="秘書">
+<title>秘書</title>
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<style>
+  :root { --cl:#dfe2e6; --sunbg:#fdeeee; --satbg:#eaf1fb; --outbg:#f1f2f3; --bandbg:#e9ebee; --bandline:#c9ced3; --ink:#1f2933; --sub:#5b6773; --line:#d9dee3; --bg:#f6f7f9; --card:#fff; --acc:#0b6bcb; --acc-ink:#fff; --note-bg:#fff8e1; --note-line:#f0d98a; --ok:#1e7d4f; --ng:#c0392b; --tab:#3d434a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; font-size:17px; -webkit-text-size-adjust:100%; }
+  main { max-width:720px; margin:0 auto; padding:12px 16px 110px; padding-top:max(12px, env(safe-area-inset-top)); }
+  header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  h1 { font-size:20px; margin:0; }
+  button { font:inherit; color:inherit; cursor:pointer; border-radius:10px; border:1px solid var(--line); background:var(--card); padding:10px 16px; min-height:44px; }
+  button.main { background:var(--acc); color:var(--acc-ink); border-color:var(--acc); font-weight:700; }
+  button:disabled { opacity:.45; cursor:default; }
+  textarea, input, select { width:100%; font:inherit; font-size:17px; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; line-height:1.6; }
+  textarea { resize:vertical; }
+  #input { min-height:min(30vh, 300px); }
+  .hint { color:var(--sub); font-size:14px; display:flex; justify-content:space-between; gap:8px; margin:4px 2px 0; }
+  #count { white-space:nowrap; }
+  .rec-box { margin-bottom:10px; }
+  .rec-box .row-btns { margin:0 0 6px; }
+  button.rec { flex:1; background:#c0392b; border-color:#c0392b; color:#fff; font-weight:700; }
+  button.rec.on { background:#fff; color:#c0392b; animation:blink 1.6s infinite; }
+  @keyframes blink { 50% { opacity:.6; } }
+  .row-btns { display:flex; gap:10px; margin:12px 0; flex-wrap:wrap; }
+  .row-btns .main { flex:1; }
+  #status { color:var(--sub); font-size:15px; min-height:1.6em; }
+  #status.err { color:var(--ng); font-weight:700; }
+  #status.ok { color:var(--ok); font-weight:700; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:12px; }
+  .sec { font-size:15px; font-weight:700; margin:0 2px 8px; display:flex; justify-content:space-between; align-items:baseline; }
+  .sec small { font-weight:400; color:var(--sub); font-size:13px; }
+  .lbl { font-size:13px; font-weight:700; color:var(--sub); margin:12px 2px 4px; }
+  .lbl small { font-weight:400; }
+  .notice { background:var(--note-bg); border:1px solid var(--note-line); border-radius:10px; padding:10px 12px; margin:0 0 10px; font-size:15px; }
+  .notice ul { margin:4px 0 0; padding-left:1.2em; }
+  .meta { color:var(--sub); font-size:13px; margin-top:6px; }
+  .cost { max-width:320px; margin-left:auto; }
+  .cost div { display:flex; justify-content:space-between; gap:14px; }
+  .cost .sum { border-top:1px solid var(--line); padding-top:3px; margin-top:3px; font-weight:700; color:var(--ink); }
+  .cost .note { justify-content:flex-end; font-size:11px; }
+  /* 仕分けの1行 */
+  .it { display:flex; gap:8px; align-items:flex-start; padding:8px 0; border-top:1px solid var(--line); }
+  .it:first-of-type { border-top:none; }
+  .it > input[type=checkbox] { width:24px; height:24px; flex:none; margin:8px 0 0; accent-color:var(--acc); }
+  .it .f { flex:1; min-width:0; }
+  .it .f input, .it .f select { padding:6px 8px; font-size:16px; }
+  .it.off .f { opacity:.4; }
+  .it .grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:6px; margin-top:6px; }
+  .it .grid input, .it .grid select { min-width:0; max-width:100%; }
+  .it .grid .wide { grid-column:1 / -1; }
+  .it label { display:block; font-size:12px; color:var(--sub); }
+  details.fix summary { font-size:13px; color:var(--acc); cursor:pointer; margin-top:4px; }
+  ul.bul { margin:4px 0 0; padding-left:1.2em; font-size:14px; color:var(--sub); }
+  ul.bul li { margin:1px 0; }
+  .evform textarea { padding:7px 9px; font-size:16px; }
+  .pills { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+  .pill { font-size:12px; padding:1px 8px; border-radius:10px; background:#eef2f6; color:var(--sub); }
+  .pill.warn { background:#ffd84a; color:#1f2933; }
+  details.memo summary { cursor:pointer; font-weight:700; font-size:15px; }
+  details.memo[open] summary { margin-bottom:6px; }
+  /* 本文:推測した言葉に色を付けられるよう、textarea ではなく直接書ける欄にする */
+  .editor { min-height:6em; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; white-space:pre-wrap; word-break:break-word; outline:none; line-height:1.6; font-size:17px; }
+  .editor:focus { border-color:var(--acc); box-shadow:0 0 0 1px var(--acc); }
+  .searchbox { position:relative; margin-bottom:8px; }
+  .searchbox input::-webkit-search-cancel-button { display:none; }
+  /* 検索中の帯:何の言葉で何件か+解除 */
+  .searchbar { display:flex; align-items:center; justify-content:space-between; gap:8px; background:#fff4e5; color:#1f2933; border:1px solid #f0b429; border-radius:10px; padding:6px 6px 6px 12px; margin-bottom:10px; font-size:14px; }
+  .searchbar button { min-height:34px; padding:4px 12px; font-size:14px; white-space:nowrap; background:#fff; color:#1f2933; border-color:#f0b429; }
+  mark.hit { background:#ff9f43; color:#1f2933; border-radius:3px; padding:0 1px; }
+  mark.guess { background:#ffd84a; color:#1f2933; border-radius:4px; padding:0 2px; -webkit-box-decoration-break:clone; box-decoration-break:clone; }
+  /* 🏠 ホーム */
+  .wg { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:10px 12px; margin-bottom:10px; }
+  .wg.now { border:2px solid #f0b429; background:#fffaf0; }
+  .wgt { display:flex; justify-content:space-between; align-items:baseline; font-weight:700; font-size:16px; margin-bottom:2px; }
+  .wgt button { border:none; background:none; padding:2px 0; min-height:30px; color:var(--acc); font-size:14px; font-weight:400; }
+  .wg .lrow { border:none; border-top:1px solid var(--line); border-radius:0; margin:0; padding:7px 0; }
+  .wg .lrow:first-of-type { border-top:none; }
+  .wg .g { font-size:12px; color:var(--sub); font-weight:700; margin-top:4px; }
+  .wg .empty { color:var(--sub); font-size:14px; padding:4px 0; }
+  .goalrow { font-size:15px; padding:3px 0; }
+  .notebtn { display:flex; align-items:center; justify-content:space-between; width:100%; margin-top:6px; min-height:44px; padding:6px 12px; text-align:left; border:1px solid #2e8b57; border-radius:10px; font-size:15px; }
+  .notebtn small { color:var(--sub); font-size:12px; } .notebtn .go { font-size:20px; color:var(--sub); }
+  .notebody { font-size:15px; line-height:1.7; white-space:pre-wrap; }
+  .notebody .li { padding-left:1em; text-indent:-1em; margin:2px 0; }
+  .note-edit { border:none; background:none; color:var(--acc); font-size:14px; padding:2px 0; min-height:30px; }
+  .goalrow span { display:inline-block; font-size:11px; background:#eef2f6; color:var(--sub); border-radius:8px; padding:0 6px; margin-right:5px; }
+  .minis { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px; }
+  .mini { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:10px; font-size:13px; color:var(--sub); text-align:left; min-height:0; }
+  .mini b { display:block; font-size:15px; color:var(--ink); }
+  .mini .n { font-size:22px; font-weight:700; color:var(--ink); margin-right:4px; }
+  .star { font-size:20px; color:#c8ced4; flex:none; cursor:pointer; line-height:1.1; user-select:none; }
+  .star.on { color:#f0b429; }
+  .back { font-size:17px; color:var(--acc); padding:6px 0; }
+  .mgroup { font-size:13px; color:var(--sub); font-weight:700; margin:12px 2px 4px; }
+  @media (prefers-color-scheme: dark) { .wg.now { background:#2e2a1c; } .goalrow span { background:#2a3239; } }
+  /* 📋 まとめ */
+  .chips { display:flex; gap:6px; overflow-x:auto; padding:2px 0 8px; margin:0 -16px; padding-left:16px; padding-right:16px; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+  .chips::-webkit-scrollbar { display:none; }
+  .chips button { flex:none; min-height:36px; padding:4px 12px; border-radius:18px; font-size:15px; white-space:nowrap; }
+  .chips button.on { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .showdone { display:flex; align-items:center; gap:6px; margin:0 2px 6px; }
+  .showdone input { width:18px; height:18px; }
+  .lrow { display:flex; gap:10px; align-items:flex-start; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; margin:5px 0; }
+  .lrow input[type=checkbox] { width:24px; height:24px; flex:none; margin:1px 0 0; accent-color:var(--ok); }
+  .lrow .tx { flex:1; min-width:0; cursor:pointer; }
+  .lrow .tx small { display:block; color:var(--sub); font-size:12px; margin-top:1px; }
+  .lrow.done .tx > span { text-decoration:line-through; color:var(--sub); }
+  .lrow.over small .due { color:var(--ng); font-weight:700; }
+  .group h3 small { font-weight:400; color:var(--sub); }
+  .group h3.over { color:var(--ng); }
+  .memo-body { white-space:pre-wrap; }
+  .report { font-size:16px; }
+  .report h4 { margin:14px 0 4px; font-size:16px; }
+  .report h4:first-child { margin-top:0; }
+  .report ul { margin:2px 0 6px; padding-left:1.2em; }
+  .report p { margin:4px 0; }
+  .group h3 { font-size:15px; margin:14px 2px 4px; }
+  .row { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 10px; margin:4px 0; font-size:15px; }
+  .row small { color:var(--sub); display:block; font-size:12px; }
+  .soon { color:var(--sub); text-align:center; padding:40px 10px; }
+  /* 📅 カレンダー(ジョルテ風の月表示) */
+  #pageCal { margin:0 -16px; }
+  .calhead { display:flex; align-items:center; gap:6px; padding:0 10px 6px; }
+  .calhead h1 { font-size:22px; min-width:6.4em; } /* 1月と12月で幅が変わって › がずれないように */
+  .calhead button { min-height:36px; padding:4px 12px; }
+  .calhead .caladd { margin-left:auto; padding:4px 8px; font-size:14px; color:var(--acc); white-space:nowrap; }
+  .calnote:has(#calStatus:empty) { display:none; }
+  .cal { background:var(--card); border-top:1px solid var(--cl); user-select:none; -webkit-user-select:none; }
+  .cal .wd, .cal .week { display:grid; grid-template-columns:repeat(7, minmax(0,1fr)); }
+  .cal .wd div { background:#5a5f64; color:#fff; text-align:center; font-size:12px; padding:1px 0; border-right:1px solid #777; }
+  .cal .wd div:first-child { background:#8b4a4a; } .cal .wd div:last-child { background:#4a5a80; border-right:none; }
+  .cal .week { position:relative; }
+  .cal .d { height:var(--cellh, 92px); border-right:1px solid var(--cl); border-bottom:1px solid var(--cl); padding:0 1px; overflow:hidden; font-size:11px; line-height:1.38; cursor:pointer; }
+  .cal .d:nth-child(7n) { border-right:none; }
+  .cal .d .n { font-size:15px; line-height:1.3; padding-left:2px; }
+  .cal .d.sun, .cal .d.hol { background:var(--sunbg); } .cal .d.sun .n, .cal .d.hol .n, .cal .d .h { color:#d33; }
+  .cal .d.sat { background:var(--satbg); } .cal .d.sat .n { color:#2a5db0; }
+  .cal .d.out { background:var(--outbg); } .cal .d.out .n, .cal .d.out .e { color:#999; }
+  .cal .d.today { box-shadow:inset 0 0 0 2px var(--acc); }
+  .cal .d .e, .cal .d .h { white-space:nowrap; overflow:hidden; }
+  .cal .d .more { color:var(--sub); font-size:10px; }
+  .cal .d .e.fam { color:#1e7d4f; }
+  .cal .d .e.task { color:#0b6bcb; }
+  .cal .d .e.task.done { color:#999; text-decoration:line-through; }
+  .dayev.task { display:flex; gap:10px; align-items:center; }
+  .dayev.task input { width:22px; height:22px; flex:none; accent-color:var(--acc); }
+  .dayev.task.done b { text-decoration:line-through; color:var(--sub); }
+  .cal .band { position:absolute; height:15px; font-size:11px; line-height:14px; background:var(--bandbg); border:1px solid var(--bandline); border-radius:3px; padding:0 3px; white-space:nowrap; overflow:hidden; pointer-events:none; }
+  .cal .d .n { display:flex; align-items:center; gap:3px; }
+  .wk { font-size:10px; line-height:1; padding:2px 3px; border-radius:4px; color:#fff; font-weight:700; }
+  .wk.w1 { background:#d9822b; } .wk.w2 { background:#2e8b57; }
+  .wk.man { box-shadow:0 0 0 1.5px var(--ink); }
+  .worksum { display:flex; gap:14px; flex-wrap:wrap; align-items:center; padding:7px 12px 0; font-size:14px; }
+  .worksum b { font-size:17px; }
+  .worksum small { color:var(--sub); font-size:12px; }
+  .worktoggle { margin-left:auto; min-height:30px; padding:2px 4px; font-size:14px; }
+  .worksum.open .worktoggle { margin-left:0; }
+  .ailine { display:flex; align-items:center; gap:6px; margin-top:8px; font-size:12px; color:var(--sub); }
+  .ailine { flex-wrap:wrap; }
+  /* 小さなオン・オフのスイッチ */
+  .aiswitch { appearance:none; -webkit-appearance:none; width:40px; height:22px; min-height:0; margin:0; padding:0; border-radius:11px; background:var(--line); position:relative; cursor:pointer; flex:none; transition:background .15s; border:none; }
+  .aiswitch::after { content:""; position:absolute; left:2px; top:2px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.3); transition:left .15s; }
+  .aiswitch:checked { background:#2e8b57; }
+  .aiswitch:checked::after { left:20px; }
+  .more-todo { display:block; width:100%; text-align:center; padding:10px 0 4px; font-size:15px; }
+  /* 有給:押せると分かるよう、一覧の行のような横長の帯。最後の記録も見せる */
+  .worksum .leavebtn { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; min-height:52px; padding:8px 14px; text-align:left; border:1px solid #2e8b57; border-radius:12px; }
+  .worksum .leavebtn b { font-size:16px; } .worksum .leavebtn small { display:block; color:var(--sub); font-size:12px; } .worksum .leavebtn .go { font-size:22px; color:var(--sub); }
+  .leaveleft { text-align:center; padding:6px 0 2px; } .leaveleft b { font-size:44px; } .leaveleft small { display:block; color:var(--sub); font-size:13px; }
+  .lvrow { display:flex; gap:8px; align-items:center; padding:9px 0; border-top:1px solid var(--line); font-size:15px; } .lvrow:first-child { border-top:none; }
+  .lvrow .m { width:72px; flex:none; font-weight:700; } .lvrow .k { flex:1; } .lvrow .k small { display:block; color:var(--sub); font-size:12px; }
+  .lvrow .l { color:var(--sub); font-size:13px; white-space:nowrap; } .lvrow .add { color:#2e8b57; } .lvrow button { min-height:30px; padding:2px 8px; font-size:13px; }
+  .lvform { display:grid; grid-template-columns:auto 1fr; gap:8px 10px; align-items:center; } .lvform label { font-size:14px; color:var(--sub); }
+  .leavedue { display:block; width:100%; text-align:left; background:#fff4e5; border:2px solid #f0b429; border-radius:12px; padding:10px 12px; margin-bottom:10px; font-size:15px; color:var(--ink); }
+  .daywork { display:flex; gap:6px; flex-wrap:wrap; margin:2px 0 10px; }
+  .daywork button { min-height:36px; padding:4px 10px; font-size:14px; }
+  .daywork button.on { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .calbar { display:flex; justify-content:space-between; align-items:center; background:#5a5f64; color:#fff; font-size:14px; padding:2px 6px 2px 12px; }
+  .calbar button { color:#fff; background:none; border:none; font-size:13px; min-height:30px; padding:2px 8px; }
+  .cl-day { display:flex; gap:10px; padding:7px 12px; border-bottom:1px solid var(--line); background:var(--card); cursor:pointer; }
+  .cl-day.today { box-shadow:inset 3px 0 0 var(--acc); }
+  .cl-day.past { opacity:.55; }
+  .cl-date { flex:none; width:58px; font-size:13px; color:var(--sub); padding-top:1px; }
+  .cl-date.sun, .cl-date.hol { color:#d33; } .cl-date.sat { color:#2a5db0; }
+  .cl-evs { flex:1; min-width:0; font-size:15px; line-height:1.45; }
+  .cl-evs div { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cl-evs .tm { color:var(--sub); font-size:12px; margin-right:6px; }
+  .cl-evs .h { color:#d33; } .cl-evs .fam { color:#1e7d4f; } .cl-evs .task { color:#0b6bcb; } .cl-evs .task.done { color:#999; text-decoration:line-through; }
+  .cl-empty { color:var(--sub); font-size:14px; padding:12px; }
+  .calnote { color:var(--sub); font-size:12px; padding:6px 12px; display:flex; justify-content:space-between; gap:8px; }
+  dialog { border:1px solid var(--line); border-radius:14px; padding:14px; width:min(94vw, 480px); max-height:86vh; overflow:auto; color:var(--ink); background:var(--card); }
+  dialog::backdrop { background:rgba(0,0,0,.35); }
+  dialog { overscroll-behavior:contain; }
+  /* 小窓を開いている間は後ろの画面を止める(iPhone は overflow だけでは止まらないので固定する) */
+  body.dlg-lock { position:fixed; left:0; right:0; overflow:hidden; }
+  dialog h3 { margin:0 0 8px; font-size:18px; }
+  .dayev { border-bottom:1px solid var(--line); padding:9px 2px; cursor:pointer; }
+  .dayev b { display:block; font-size:16px; font-weight:600; }
+  .dayev small { color:var(--sub); font-size:13px; }
+  .dayev .h { color:#d33; }
+  .evform label { display:block; font-size:13px; color:var(--sub); margin:8px 0 2px; }
+  .evform .two { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; }
+  .evform input { padding:7px 9px; min-width:0; }
+  button.danger { color:var(--ng); }
+  /* ☀️ 気分・棚卸し・心の天気 */
+  .moods { display:flex; gap:6px; }
+  .moods button { flex:1; font-size:26px; padding:4px 0; min-height:50px; }
+  .moods button.on { background:#e8f1fb; border-color:var(--acc); box-shadow:0 0 0 1px var(--acc); }
+  button.tired { width:100%; margin:0 0 12px; text-align:left; font-weight:700; font-size:17px; background:var(--card); border:1px solid var(--note-line); }
+  button.tired small { display:block; font-weight:400; font-size:13px; color:var(--sub); }
+  .meter { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:6px; margin:4px 0 6px; }
+  .meter div { border:1px solid var(--line); border-radius:8px; padding:5px 2px; text-align:center; font-size:12px; color:var(--sub); }
+  .meter b { display:block; font-size:22px; color:var(--ink); line-height:1.2; }
+  .meter b.up { color:var(--ng); } .meter b.down { color:var(--ok); }
+  .meter small { display:block; font-size:11px; }
+  .box4 { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:6px; margin:8px 0; }
+  .box4 > div { border-radius:8px; padding:7px 8px; font-size:14px; }
+  .box4 b { display:block; font-size:13px; }
+  .box4 ul { margin:2px 0 0; padding-left:1.1em; }
+  .box4 .a { background:#fdecea; } .box4 .b { background:#fff4d6; } .box4 .c { background:#eaf4ec; } .box4 .d { background:#eef2f6; }
+  .verdict { background:#e6f4ea; border-radius:8px; padding:8px 10px; font-weight:700; margin:6px 0; }
+  .think { background:#f2f8fe; border-radius:8px; padding:8px 10px; margin:6px 0; font-size:15px; }
+  .safety { background:#fff8f1; border:1px solid #f3c89b; border-radius:8px; padding:8px 10px; margin:6px 0; font-size:15px; }
+  table.wx { width:100%; border-collapse:collapse; font-size:13px; }
+  table.wx th, table.wx td { border-bottom:1px solid var(--line); padding:4px 2px; text-align:center; }
+  table.wx th { color:var(--sub); font-weight:400; font-size:11px; }
+  table.wx td:first-child { text-align:left; white-space:nowrap; }
+  table.wx tr.cur td { font-weight:700; }
+  @media (prefers-color-scheme: dark) {
+    .box4 .a { background:#3a2422; } .box4 .b { background:#3a3320; } .box4 .c { background:#1f3326; } .box4 .d { background:#262d34; }
+    .verdict { background:#1f3326; } .think { background:#1d2533; } .safety { background:#3a2e20; border-color:#6b5a2a; }
+    .moods button.on { background:#1d2533; }
+  }
+  /* 下のタブ */
+  nav.tabs { position:fixed; left:0; right:0; bottom:0; display:flex; background:var(--tab); padding-bottom:env(safe-area-inset-bottom); z-index:5; }
+  nav.tabs button { flex:1; border:none; border-radius:0; background:none; color:#cfd5db; font-size:11px; padding:6px 0 4px; min-height:54px; display:flex; flex-direction:column; align-items:center; gap:1px; }
+  nav.tabs button b { font-size:21px; font-weight:400; line-height:1.2; }
+  nav.tabs button.on { color:#fff; background:rgba(255,255,255,.08); }
+  .usage-box { margin-top:16px; padding-top:12px; border-top:1px solid var(--line); font-size:15px; }
+  .usage-box .cost { max-width:none; margin:6px 0 0; color:var(--sub); }
+  .usage-box h4 { margin:16px 0 4px; font-size:14px; }
+  .month { border:1px solid var(--line); border-radius:10px; padding:8px 10px; margin:6px 0 0; font-size:14px; color:var(--sub); }
+  .month div { display:flex; justify-content:space-between; gap:10px; }
+  .month .head { color:var(--ink); font-weight:700; font-size:15px; margin-bottom:2px; }
+  .month details { margin-top:6px; border-top:1px dashed var(--line); padding-top:4px; }
+  .month summary { color:var(--ink); cursor:pointer; font-size:14px; }
+  .month h5 { margin:8px 0 2px; font-size:13px; color:var(--ink); }
+  .month div span:last-child { white-space:nowrap; }
+  #exportCsv { width:100%; margin-top:10px; }
+  .set label { display:block; font-size:15px; margin:10px 0 4px; }
+  .muted { color:var(--sub); font-size:13px; }
+  #toast { position:fixed; left:50%; bottom:90px; transform:translateX(-50%); background:#1f2933; color:#fff; padding:10px 18px; border-radius:20px; font-size:15px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:9; }
+  #toast.show { opacity:.92; }
+  [hidden] { display:none !important; }
+  @media (prefers-color-scheme: dark) {
+    :root { --cl:#30373e; --sunbg:#2c2123; --satbg:#1d2533; --outbg:#181c20; --bandbg:#2a3138; --bandline:#46505a; --ink:#e6e9ec; --sub:#9aa5b1; --line:#3a424a; --bg:#15191d; --card:#1f252b; --note-bg:#3a3320; --note-line:#6b5a2a; --ok:#5cc98f; --ng:#ff7b6b; --tab:#0e1114; }
+    .pill { background:#2a3239; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <!-- 🎤 話す -->
+  <div id="pageSpeak">
+    <header><h1>話す</h1><button class="link" id="openSettings2" aria-label="設定" style="font-size:22px">⚙</button></header>
+    <section id="speak">
+      <div class="rec-box">
+        <div class="row-btns">
+          <button id="recBtn" class="rec">● 録音を始める</button>
+          <button id="fileBtn">📂 音声ファイル</button>
+          <button id="retryBtn" hidden>文字起こしをやり直す</button>
+        </div>
+        <!-- 「audio/*」だと iPhone が写真・ビデオのメニューを先に出すので、拡張子だけにして「ファイル」を直接開く -->
+        <input type="file" id="fileIn" accept=".m4a,.mp3,.wav,.aac" hidden>
+        <div id="recStatus" class="hint"></div>
+      </div>
+      <textarea id="input" placeholder="予定・やること・思いついたことなど、自由に話してください。&#10;例:「明日は洗車をする。来週の水曜14時から税理士さんと打ち合わせ…」&#10;キーボードの🎤でも話せます。"></textarea>
+      <div class="hint"><span>聞き間違いや「えー」はそのままでOK。患者さんの情報は話さないでください。</span><span id="count">0字</span></div>
+      <div class="row-btns">
+        <button class="main" id="run">まとめて仕分ける</button>
+        <button id="clear">消す</button>
+      </div>
+      <!-- ふだんは触らない設定なので、小さめ・灰色で控えめに -->
+      <label class="ailine"><span>節約モード(Sonnet・約2円)</span><input type="checkbox" class="aiswitch" id="aiSave" role="switch"><span id="aiNote"></span></label>
+    </section>
+    <div id="status" role="status"></div>
+
+    <section id="result" hidden>
+      <div class="notice" id="checks" hidden></div>
+      <div class="card" id="evCard">
+        <div class="sec"><span>📅 予定</span><small>☑ がGoogleカレンダーに入ります</small></div>
+        <div id="events"></div>
+      </div>
+      <div class="card" id="itCard">
+        <div class="sec"><span>📋 仕分け</span><small>☑ を外すと保存しません</small></div>
+        <div id="items"></div>
+      </div>
+      <div class="card">
+        <details class="memo" id="memoBox">
+          <summary>📝 メモ(話した内容のまとめ)</summary>
+          <div class="lbl">タイトル</div>
+          <input id="title">
+          <div class="lbl">要点 <small>(1行に1つ)</small></div>
+          <textarea id="summary" rows="2"></textarea>
+          <div class="lbl">本文</div>
+          <div id="body" class="editor"></div>
+          <div class="lbl">タグ <small>(読点「、」で区切る)</small></div>
+          <input id="tags">
+        </details>
+      </div>
+      <div class="card">
+        <div class="sec"><span>今の気分(押さなくてもよい)</span></div>
+        <div class="moods" id="moodSave"></div>
+      </div>
+      <div class="meta" id="meta"></div>
+      <div class="row-btns">
+        <button class="main" id="save">保存する</button>
+      </div>
+      <div class="hint"><span>欄の中は直接直せます。直してから保存してください。</span></div>
+    </section>
+    <div class="row-btns" id="nextRow" hidden><button class="main" id="next">次を話す</button></div>
+  </div>
+
+  <!-- 📅 カレンダー(Googleカレンダーの予定を月表示。ジョルテ風) -->
+  <div id="pageCal" hidden>
+    <div class="calhead">
+      <button id="calPrev" aria-label="前の月">‹</button>
+      <h1 id="calTitle"></h1>
+      <button id="calNext" aria-label="次の月">›</button>
+      <button id="calAdd" class="caladd" aria-label="予定を追加">＋ 予定</button>
+      <button id="calToday">今月</button>
+    </div>
+    <div class="cal" id="calGrid"></div>
+    <div class="worksum" id="workSum"></div>
+    <div class="calnote"><span id="calStatus"></span></div>
+    <div class="calbar"><span>この月の予定</span><button class="link" id="calListToggle" aria-label="一覧の表示を切り替え"></button></div>
+    <div id="calList"></div>
+  </div>
+
+  <!-- 🌴 有給(カレンダーの勤務日数の横から開く。月ごとに手で記録。見出しなどの言葉は PROFILE.leave) -->
+  <div id="pageLeave" hidden>
+    <header><button class="link back" data-back="pageCal">‹ カレンダー</button><h1 id="lvTitle">有給</h1><span></span></header>
+    <div class="card"><div class="leaveleft"><small>残り</small><b id="lvLeft">–</b> 日</div></div>
+    <div class="card">
+      <div class="sec"><span>＋ 記録する</span><small id="lvHint"></small></div>
+      <div class="lvform">
+        <label for="lvMonth">何月分</label><input type="month" id="lvMonth">
+        <label>種類</label><div class="daywork" id="lvKind" style="margin:0"><button data-k="消化" class="on">消化</button><button data-k="付与">付与(増えた)</button></div>
+        <label for="lvDays">日数</label><input type="number" id="lvDays" min="0" step="0.5" value="1" inputmode="decimal">
+        <label for="lvNote">メモ</label><input id="lvNote">
+      </div>
+      <div class="row-btns"><button class="main" id="lvSave">記録する</button><button id="lvForgot">消化忘れ</button></div>
+      <div class="muted" id="lvMsg"></div>
+    </div>
+    <div class="card"><div class="sec"><span>記録</span><small>新しい順</small></div><div id="lvList"></div></div>
+  </div>
+
+  <!-- 📓 秘書ノート(ホームの🎯目標から開く。秘書が声かけで参考にする取扱説明書。見出しごとに直せる) -->
+  <div id="pageNote" hidden>
+    <header><button class="link back" data-back="pageHome">‹ ホーム</button><h1>秘書ノート</h1><span></span></header>
+    <p class="muted" style="margin:0 2px 10px">秘書が声かけのときに参考にする「取扱説明書」です。見出しの「直す」で書きかえられます。1行に1つ、「・」で始めると箇条書きになります。</p>
+    <div id="noteList"></div>
+    <div class="muted" id="noteMsg"></div>
+  </div>
+
+  <!-- ☀️ 朝のレポート(Macの定期タスクが毎朝5時に置く) -->
+  <div id="pageMorning" hidden>
+    <div id="mornLeave"></div>
+    <div class="card">
+      <div class="sec"><span>今の気分は?</span><small>押すと記録します</small></div>
+      <div class="moods" id="moodNow"></div>
+    </div>
+    <button class="tired" id="openTriage">😣 いっぱいいっぱい…<small>やることの量を、いつもと比べて確かめる</small></button>
+    <div class="card" id="triageBox" hidden>
+      <div class="sec"><span>📊 課題の棚卸し</span><small id="tgWeek"></small></div>
+      <div class="meter" id="tgMeter"></div>
+      <div class="muted" id="tgNote"></div>
+      <div id="tgResult"></div>
+      <div id="tgAsk">
+        <div class="lbl">今の気持ち(書かなくてもよい)</div>
+        <textarea id="tgFeeling" rows="2" placeholder="例:やることが多すぎて何も終わらない気がする"></textarea>
+        <div class="row-btns"><button class="main" id="tgRun">秘書に仕分けてもらう</button><button id="tgClose">閉じる</button></div>
+        <div class="muted">AIが今日やるべきもの・待てるものに分けます(1回 約5円)。</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sec"><span>☀️ 朝のレポート</span><select id="repDate" style="width:auto;padding:4px 6px;font-size:14px" aria-label="日付"></select></div>
+      <div id="report" class="report"></div>
+    </div>
+    <div class="card">
+      <div class="sec"><span>🌤 心の天気(週ごと)</span><small>週は月曜から</small></div>
+      <div id="weather"></div>
+    </div>
+  </div>
+
+  <!-- 🏠 ホーム(一画面で見渡す。各枠の「すべて」で下の一覧へ) -->
+  <div id="pageHome" hidden>
+    <header><h1 id="homeDate"></h1><button class="link" id="openSettings" aria-label="設定" style="font-size:22px">⚙</button></header>
+    <div id="home"></div>
+  </div>
+
+  <!-- 📝 メモ(話したメモの一覧。月ごと・検索) -->
+  <div id="pageMemo" hidden>
+    <header><h1>メモ</h1></header>
+    <div class="searchbox"><input id="memoSearch" type="search" placeholder="🔍 メモを検索"></div>
+    <div class="searchbar" id="memoSearchBar" hidden><span id="memoSearchInfo"></span><button id="memoSearchClear">✕ 検索を解除</button></div>
+    <div id="memoList"></div>
+  </div>
+
+  <!-- 📋 一覧(ホームの「すべて」から。分野ごと。やることは期限ごと) -->
+  <div id="pageList" hidden>
+    <header><button class="link back" data-back="pageHome">‹ ホーム</button><button id="addItem">＋ 追加</button></header>
+    <div class="chips" id="chips"></div>
+    <label class="muted showdone"><input type="checkbox" id="showDone"> 完了したものも見る</label>
+    <div id="list"></div>
+  </div>
+
+  <!-- ⚙ 設定 -->
+  <div id="pageSet" hidden class="set">
+    <header><button class="link back" data-back="pageHome" id="setBack">‹ ホーム</button><h1>設定</h1><span></span></header>
+    <label for="pass">合言葉</label>
+    <input id="pass" type="password" autocomplete="off">
+    <label for="api">中継サーバーのURL</label>
+    <input id="api" type="url" placeholder="ふつうは空欄のまま">
+    <label for="device">この端末の名前(使った記録に残します。例:iPhone・Mac)</label>
+    <input id="device" type="text" maxlength="30" placeholder="名前なし">
+    <label for="aiModel">まとめのAI</label>
+    <select id="aiModel"><option value="opus">Opus(精度重視・1回 約4〜5円)</option><option value="sonnet">Sonnet(節約・1回 約2円)</option></select>
+    <p class="muted">Sonnet は費用が約半分で速いが、分野の違う話までまとめたり、確認の説明を誤ったりすることがときどきあります。</p>
+    <label for="clearMin">保存していない話した内容を、触らずに何分たったら消すか</label>
+    <select id="clearMin"><option value="0">消さない</option><option value="10">10分</option><option value="30">30分</option><option value="60">60分</option><option value="180">3時間</option></select>
+    <p class="muted">保存したものは5分で話す画面から片付けます(記録には残っています)。録音中・まとめ中は消しません。</p>
+    <p class="muted">この端末の中だけに保存します。</p>
+    <div class="row-btns"><button class="main" id="saveSettings">保存</button></div>
+    <div class="usage-box">
+      <b>使った金額と記録(すべての端末の合計)</b>
+      <div id="usageDetail" class="cost"></div>
+      <h4>月ごと</h4>
+      <div id="usageMonths"></div>
+      <button id="exportCsv">1回ごとの記録をCSVで書き出す(Excel・Numbers用)</button>
+      <p class="muted">話した内容は記録しません(字数・長さ・金額だけ)。</p>
+    </div>
+    <div class="usage-box">
+      <b>🗑 ゴミ箱(消したものを30日間残します)</b>
+      <div id="trashList"></div>
+      <p class="muted">データ全体は毎晩Macに書き出し、iCloud Driveにも保管しています。</p>
+    </div>
+  </div>
+</main>
+
+<nav class="tabs">
+  <button data-page="pageSpeak" class="on"><b>🎤</b>話す</button>
+  <button data-page="pageHome"><b>🏠</b>ホーム</button>
+  <button data-page="pageCal"><b>📅</b>カレンダー</button>
+  <button data-page="pageMemo"><b>📝</b>メモ</button>
+  <button data-page="pageMorning"><b>☀️</b>朝</button>
+</nav>
+
+<dialog id="dayDlg">
+  <h3 id="dayTitle"></h3>
+  <div class="muted" id="dayWorkNote"></div>
+  <div class="daywork" id="dayWork"></div>
+  <div id="dayList"></div>
+  <div class="row-btns"><button class="main" id="dayAdd">＋ この日に予定を追加</button><button id="dayClose">閉じる</button></div>
+</dialog>
+
+<dialog id="evDlg" class="evform">
+  <h3 id="evTitle">予定</h3>
+  <label>予定の名前<input id="evName"></label>
+  <div class="two"><label>日付<input type="date" id="evDate"></label><label>最終日(何日も続くとき)<input type="date" id="evEndDate"></label></div>
+  <div class="two"><label>開始(空なら終日)<input type="time" id="evStart"></label><label>終了<input type="time" id="evEnd"></label></div>
+  <label>場所<input id="evPlace"></label>
+  <label>メモ<input id="evNote"></label>
+  <label id="evRepeatRow">くり返し<select id="evRepeat"><option value="">しない</option><option value="weekly">毎週(同じ曜日)</option><option value="monthly">毎月(同じ日)</option><option value="yearly">毎年(同じ月日)</option></select></label>
+  <div class="muted" id="evRepeatNote" hidden>くり返しの予定です。直す・消すは、Googleカレンダーのアプリで行ってください(1回だけか、全部かを選べるため)。</div>
+  <div class="row-btns"><button class="main" id="evSave">保存</button><button id="evCancel">やめる</button><button class="danger" id="evDel">削除</button></div>
+  <div class="muted">Googleカレンダーにも同じように入ります。</div>
+</dialog>
+
+<dialog id="itemDlg" class="evform">
+  <h3 id="itemDlgTitle">項目</h3>
+  <label>項目<input id="itName"></label>
+  <div class="two"><label>分野<select id="itCat"></select></label><label>期限<input type="date" id="itDue"></label></div>
+  <label>相手<input id="itPerson"></label>
+  <label>くわしく(1行に1つ)<textarea id="itDetail" rows="5"></textarea></label>
+  <div class="row-btns"><button class="main" id="itSave">保存</button><button id="itCancel">やめる</button><button class="danger" id="itDel">削除</button></div>
+</dialog>
+
+<dialog id="memoDlg">
+  <h3 id="mdTitle"></h3>
+  <div class="muted" id="mdDate"></div>
+  <div id="mdBody"></div>
+  <div class="row-btns"><button class="main" id="mdCopy">📋 コピー</button><button id="mdClose">閉じる</button></div>
+</dialog>
+
+<div id="toast"></div>
+
+<script>
+// 公開版(GitHub Pages)は Cloudflare の中継サーバーへ、Macの試作はこのページと同じ場所へ
+const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
+// 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
+// iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
+const BUILD = "87904ed7959a87f2ab5d2b7f4318a532adab91ff";
+async function checkUpdate() {
+  if (BUILD.startsWith("__") || recording || busy || sending || queue.length) return;
+  try {
+    const html = await (await fetch(location.pathname, { cache: "no-store" })).text();
+    const v = html.match(/const BUILD = "([^"]+)"/)?.[1];
+    if (v && !v.startsWith("__") && v !== BUILD) location.replace(location.pathname + "?v=" + v.slice(0, 8));
+  } catch {}
+}
+setTimeout(checkUpdate, 1500);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkUpdate(); });
+const $ = (id) => document.getElementById(id);
+const input = $("input");
+const esc = (s) => String(s ?? "").replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]));
+
+// 個人の設定(分野の名前と絵文字・勤務先と曜日・締め日・有給の言葉)。この画面は公開の場所に置くので、
+// 個人が分かる言葉はここに書かず、合言葉の通ったサーバー(server/profile.mjs)から読んで、この端末に控える。applyProfile で入れる
+let CATEGORIES = [], ICON = {}, WORK = {}, PROFILE = null;
+
+// この端末だけの保存(書きかけと設定)。使えない環境でも動くようにする
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
+};
+// 音声カルテ・音声メモと同じ住所(ryutaro16.github.io)なので、名前に「hisho:」を付けて分ける。
+// 合言葉は同じなので、まだ入れていなければ音声メモ・音声カルテで入れたものを使う
+let settings = store.get("hisho:settings") || { pass: store.get("memo:settings")?.pass || store.get("settings")?.pass || "", api: "" };
+// 書きかけ:話した内容・話し始めた日時・まとめ(予定と仕分けは on で選ぶ)・保存結果
+const emptyDraft = () => ({ input: "", startedAt: null, memo: null, meta: "", saved: null, stt: 0 });
+let draft = store.get("hisho:draft") || emptyDraft();
+// 最後に触った時刻 t も一緒に残す(一定時間たったら話す画面を空にするため)
+const saveDraft = () => { draft.t = Date.now(); store.set("hisho:draft", draft); };
+
+const WEEK = "日月火水木金土";
+const pad = (n) => String(n).padStart(2, "0");
+function dateLabel(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}(${WEEK[d.getDay()]}) ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function isoLocal(d) {
+  const off = -d.getTimezoneOffset();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00${off >= 0 ? "+" : "-"}${pad(Math.floor(Math.abs(off) / 60))}:${pad(Math.abs(off) % 60)}`;
+}
+// "2026-11-02" → "11/2(月)"
+function md(s) {
+  if (!/^\d{4}-\d\d-\d\d$/.test(s || "")) return s || "";
+  const d = new Date(s + "T00:00:00");
+  return `${d.getMonth() + 1}/${d.getDate()}(${WEEK[d.getDay()]})`;
+}
+
+// ---- ページの切り替え。一覧(pageList)と設定(pageSet)はホームから開くので、タブはホームを光らせる ----
+const TAB_OF = { pageList: "pageHome", pageSet: "pageHome", pageLeave: "pageCal", pageNote: "pageHome" };
+const PAGES = ["pageSpeak", "pageHome", "pageCal", "pageMemo", "pageMorning", "pageList", "pageSet", "pageLeave", "pageNote"];
+// 一覧・設定を開いたら履歴を1つ積む。Safari の「戻る」スライドや、下の左端スライドで戻れるようにするため
+let subOpen = false, curPage = "pageSpeak";
+function showPage(page, fromPop = false) {
+  if (TAB_OF[page] && !subOpen) { history.pushState({ sub: page }, ""); subOpen = true; }
+  else if (!TAB_OF[page] && subOpen && !fromPop) { subOpen = false; history.back(); } // タブで移ったときは積んだ分を戻しておく
+  curPage = page;
+  main.style.transform = "";
+  for (const id of PAGES) $(id).hidden = id !== page;
+  const tab = TAB_OF[page] || page;
+  for (const x of document.querySelectorAll("nav.tabs button")) x.classList.toggle("on", x.dataset.page === tab);
+  window.scrollTo(0, 0);
+  if (page === "pageHome") loadHome();
+  if (page === "pageList") loadList();
+  if (page === "pageCal") loadCal();
+  if (page === "pageLeave") loadLeave();
+  if (page === "pageNote") loadNote();
+  if (page === "pageMemo") loadMemos();
+  if (page === "pageMorning") { loadReport(); loadWeather(); loadLeave(); }
+  if (page === "pageSet") { $("pass").value = settings.pass || ""; $("api").value = settings.api || ""; $("device").value = settings.device || ""; $("clearMin").value = String(settings.clearMin ?? 60); $("aiModel").value = settings.model || "opus"; loadUsage(); loadTrash(); }
+  if (page === "pageSpeak") requestAnimationFrame(growAll);
+}
+for (const b of document.querySelectorAll("nav.tabs button")) b.onclick = () => showPage(b.dataset.page);
+for (const b of document.querySelectorAll("[data-back]")) b.onclick = goBack;
+function goBack() { if (subOpen) history.back(); else showPage(TAB_OF[curPage] || "pageHome"); }
+window.addEventListener("popstate", () => { if (subOpen) { subOpen = false; showPage(TAB_OF[curPage] || "pageHome", true); } });
+
+// 画面の端から払って移る。画面が指についてくる
+//  ・タブの画面:左端から右へ→左隣のタブ(ホーム→話す)、右端から左へ→右隣のタブ(ホーム→カレンダー)。両端はつながっている(朝→話す、話す→朝)
+//  ・一覧・設定・有給:左端から右へ→戻る(Safari には自前の戻るスライドがあるので、ホーム画面に置いたアプリだけ)
+// 端だけにしているのは、カレンダーの月送り(左右に払う)や横のスクロールとぶつからないようにするため
+const main = document.querySelector("main");
+const standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
+const TABS = [...document.querySelectorAll("nav.tabs button")].map((b) => b.dataset.page);
+const EDGE = 28;
+let edge = null;
+document.addEventListener("touchstart", (e) => {
+  if (e.touches.length !== 1 || document.querySelector("dialog[open]")) return;
+  const t = e.touches[0], dir = t.clientX < EDGE ? 1 : t.clientX > innerWidth - EDGE ? -1 : 0; // 1=右へ払う、-1=左へ払う
+  if (!dir) return;
+  let to = null;
+  if (TAB_OF[curPage]) { if (dir === 1 && standalone) to = "back"; }
+  else to = TABS[(TABS.indexOf(curPage) - dir + TABS.length) % TABS.length];
+  if (to) edge = { x: t.clientX, y: t.clientY, dir, to, dx: 0, locked: false };
+}, { passive: true });
+document.addEventListener("touchmove", (e) => {
+  if (!edge) return;
+  const t = e.touches[0], dx = t.clientX - edge.x, dy = t.clientY - edge.y;
+  if (!edge.locked) {
+    if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { edge = null; return; } // 縦のスクロールは邪魔しない
+    if (dx * edge.dir > 8) edge.locked = true; else return;
+  }
+  edge.dx = Math.max(0, dx * edge.dir);
+  main.style.transition = "none";
+  main.style.transform = `translateX(${edge.dx * edge.dir}px)`;
+  e.preventDefault();
+}, { passive: false });
+document.addEventListener("touchend", () => {
+  if (!edge) return;
+  const { dir, to } = edge, go = edge.locked && edge.dx > Math.min(110, innerWidth * 0.3);
+  main.style.transition = "transform .18s ease-out";
+  main.style.transform = go ? `translateX(${innerWidth * dir}px)` : "";
+  edge = null;
+  setTimeout(() => { main.style.transition = ""; if (go) (to === "back" ? goBack() : showPage(to)); }, 180);
+});
+document.addEventListener("touchcancel", () => { if (edge) { main.style.transform = ""; edge = null; } });
+
+// 項目の「くわしく」:箇条書き(・で始まる行)は一覧では「中身N件」、開くと全部
+const detailLines = (d) => String(d || "").split("\n").map((l) => l.trim()).filter(Boolean);
+const bulletHtml = (d) => `<ul class="bul">${detailLines(d).map((l) => `<li>${esc(l.replace(/^[・\-*]\s*/, ""))}</li>`).join("")}</ul>`;
+const lines = (s) => s.split("\n").map((l) => l.replace(/^\s*[・\-☐]\s*/, "").trim()).filter(Boolean);
+// 本文の受け渡しは「〘推測した言葉〙」の印つきの文字で行う(音声メモと同じ)。画面では黄色の印
+const bodyBox = $("body");
+bodyBox.contentEditable = "plaintext-only";
+if (bodyBox.contentEditable !== "plaintext-only") bodyBox.contentEditable = "true";
+const BODY_MODE = bodyBox.contentEditable;
+function setBody(marked) {
+  bodyBox.innerHTML = esc(marked).replace(/〘([^〘〙\n]*)〙/g, (_, w) => `<mark class="guess" data-o="${w}">${w}</mark>`).replace(/[〘〙]/g, "");
+}
+function getBody() {
+  let s = "";
+  const walk = (n) => {
+    for (const c of n.childNodes) {
+      if (c.nodeType === Node.TEXT_NODE) s += c.data;
+      else if (c.nodeName === "BR") s += "\n";
+      else if (c.nodeName === "MARK") s += "〘" + c.textContent + "〙";
+      else { if ((c.nodeName === "DIV" || c.nodeName === "P") && s && !s.endsWith("\n")) s += "\n"; walk(c); }
+    }
+  };
+  walk(bodyBox);
+  return s.replace(/〘〙/g, "");
+}
+// 黄色の言葉を自分で直したら、その色を外し、確認の一覧からも消す
+function unmarkEdited() {
+  const sel = getSelection(), node = sel.anchorNode, off = sel.anchorOffset;
+  const fixed = [];
+  for (const m of bodyBox.querySelectorAll("mark")) {
+    if (m.textContent === m.dataset.o) continue;
+    fixed.push(m.dataset.o);
+    m.replaceWith(...m.childNodes);
+    if (node && node.isConnected) sel.collapse(node, off);
+  }
+  if (fixed.length && draft.memo) {
+    const still = new Set([...bodyBox.querySelectorAll("mark")].map((m) => m.dataset.o));
+    draft.memo.needs_check = draft.memo.needs_check.filter((c) => !fixed.some((w) => !still.has(w) && c.startsWith(w + " ")));
+    renderChecks(draft.memo.needs_check);
+  }
+}
+function grow(t) {
+  if (!t.offsetWidth) return;
+  const y = window.scrollY, box = t.parentElement;
+  box.style.minHeight = box.offsetHeight + "px";
+  t.style.height = "auto"; t.style.height = t.scrollHeight + 2 + "px";
+  box.style.minHeight = "";
+  if (window.scrollY !== y) window.scrollTo(0, y);
+}
+const growAll = () => grow($("summary"));
+window.addEventListener("resize", growAll);
+
+// ---- 予定と仕分けの欄 ----
+const REPEAT_LABEL = { "": "しない", weekly: "毎週", monthly: "毎月", yearly: "毎年" };
+function renderEvents(evs) {
+  // 直す欄を開いていた予定は、作り直しても開いたままにする
+  const open = new Set([...document.querySelectorAll("#events details.fix[open]")].map((d) => Number(d.closest(".it").dataset.i)));
+  $("events").innerHTML = evs.length ? evs.map((e, i) => `
+    <div class="it${e.on ? "" : " off"}" data-i="${i}">
+      <input type="checkbox" data-k="on" ${e.on ? "checked" : ""} aria-label="カレンダーに入れる">
+      <div class="f">
+        <input data-k="title" value="${esc(e.title)}" aria-label="予定の名前">
+        <div class="pills"><span class="pill">${md(e.date)}${e.end_date && e.end_date !== e.date ? "〜" + md(e.end_date) : ""} ${e.start ? e.start + (e.end ? "〜" + e.end : "") : "終日"}</span>${e.repeat ? `<span class="pill">🔁 ${REPEAT_LABEL[e.repeat]}</span>` : ""}${e.place ? `<span class="pill">📍${esc(e.place)}</span>` : ""}${e.unsure ? `<span class="pill warn">確認:${esc(e.unsure)}</span>` : ""}</div>
+        <details class="fix" ${e.unsure || open.has(i) ? "open" : ""}>
+          <summary>日時・場所を直す</summary>
+          <div class="grid">
+            <label>日付<input type="date" data-k="date" value="${esc(e.date)}"></label>
+            <label>最終日(何日も続くとき)<input type="date" data-k="end_date" value="${esc(e.end_date)}"></label>
+            <label>開始(空なら終日)<input type="time" data-k="start" value="${esc(e.start)}"></label>
+            <label>終了<input type="time" data-k="end" value="${esc(e.end)}"></label>
+            <label class="wide">場所<input data-k="place" value="${esc(e.place)}"></label>
+            <label class="wide">メモ<input data-k="note" value="${esc(e.note)}"></label>
+            <label class="wide">くり返し<select data-k="repeat">${Object.entries(REPEAT_LABEL).map(([v, l]) => `<option value="${v}" ${(e.repeat || "") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+          </div>
+        </details>
+      </div>
+    </div>`).join("") : `<div class="muted">予定はありませんでした</div>`;
+}
+function renderItems(items) {
+  const open = new Set([...document.querySelectorAll("#items details.fix[open]")].map((d) => Number(d.closest(".it").dataset.i)));
+  $("items").innerHTML = items.length ? items.map((it, i) => `
+    <div class="it${it.on ? "" : " off"}" data-i="${i}">
+      <input type="checkbox" data-k="on" ${it.on ? "checked" : ""} aria-label="保存する">
+      <div class="f">
+        <input data-k="title" value="${esc(it.title)}" aria-label="項目">
+        <div class="pills">${[(ICON[it.category] || "") + " " + it.category, it.area, it.kind, it.person && "👤" + it.person, it.due && "期限 " + md(it.due)].filter(Boolean).map((p) => `<span class="pill">${esc(p)}</span>`).join("")}</div>
+        ${it.detail ? bulletHtml(it.detail) : ""}
+        <details class="fix" ${open.has(i) ? "open" : ""}>
+          <summary>分野・期限を直す</summary>
+          <div class="grid">
+            <label>分野<select data-k="category">${CATEGORIES.map((c) => `<option ${c === it.category ? "selected" : ""}>${c}</option>`).join("")}</select></label>
+            <label>期限<input type="date" data-k="due" value="${esc(it.due)}"></label>
+            <label class="wide">くわしく(1行に1つ)<textarea data-k="detail" rows="3">${esc(it.detail)}</textarea></label>
+          </div>
+        </details>
+      </div>
+    </div>`).join("") : `<div class="muted">仕分ける項目はありませんでした</div>`;
+}
+// 欄を直したら、書きかけに反映する(見出しの小さな表示も作り直す)
+function bindRows(boxId, key, rerender) {
+  $(boxId).addEventListener("change", (e) => {
+    const row = e.target.closest(".it"), k = e.target.dataset.k;
+    if (!row || !k || !draft.memo) return;
+    const obj = draft.memo[key][row.dataset.i];
+    obj[k] = k === "on" ? e.target.checked : e.target.value;
+    saveDraft(); rerender(draft.memo[key]);
+  });
+  $(boxId).addEventListener("input", (e) => {
+    const row = e.target.closest(".it"), k = e.target.dataset.k;
+    if (!row || !k || k === "on" || !draft.memo) return;
+    draft.memo[key][row.dataset.i][k] = e.target.value; saveDraft();
+  });
+}
+bindRows("events", "events", renderEvents);
+bindRows("items", "items", renderItems);
+
+function fillForm(m) {
+  $("title").value = m.title; $("tags").value = m.tags.join("、");
+  $("summary").value = m.summary.join("\n"); setBody(m.body);
+  renderEvents(m.events); renderItems(m.items);
+  $("evCard").hidden = false;
+  requestAnimationFrame(growAll);
+}
+function readMemoFields() {
+  Object.assign(draft.memo, {
+    title: $("title").value.trim(), tags: $("tags").value.split(/[、,，\s]+/).map((t) => t.trim()).filter(Boolean),
+    summary: lines($("summary").value), body: getBody().trim(),
+  });
+}
+
+// このメモの費用。meta = { stt, model, yen, sec, runs }
+function renderMeta(m) {
+  const el = $("meta");
+  if (!m) { el.textContent = ""; return; }
+  const yen = (v) => `約${v.toFixed(1)}円`;
+  const rows = [];
+  if (m.stt) rows.push(["文字起こし(OpenAI)", yen(m.stt)]);
+  rows.push([`まとめ(${m.model})`, `${yen(m.yen)}・${m.sec.toFixed(1)}秒`]);
+  let html = rows.map(([k, v]) => `<div><span>${esc(k)}</span><span>${v}</span></div>`).join("");
+  html += `<div class="sum"><span>合計</span><span>${yen((m.stt || 0) + m.yen)}</span></div>`;
+  if (m.runs && m.runs.length > 1) html += `<div><span>もう一度の分を含む合計(まとめ${m.runs.length}回)</span><span>${yen((m.stt || 0) + m.runs.reduce((a, b) => a + b, 0))}</span></div>`;
+  html += `<div class="note">※1ドル150円で計算した目安</div>`;
+  el.innerHTML = `<div class="cost">${html}</div>`;
+}
+
+function renderChecks(c) {
+  $("checks").hidden = !c.length;
+  $("checks").innerHTML = c.length ? `<b>確認してください(${c.length}件)</b> AIが確信を持てなかったところです。<ul>${c.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>メモの本文の<mark class="guess">黄色の言葉</mark>がその場所です。` : "";
+}
+
+function render() {
+  input.value = draft.input; $("count").textContent = draft.input.length + "字";
+  const m = draft.memo;
+  $("result").hidden = !m;
+  if (m) { fillForm(m); renderChecks(m.needs_check); renderMeta(draft.meta); renderMoodSave(); }
+  const saved = !!draft.saved;
+  const transcribing = recording || sending || queue.length > 0 || (waitLast && !lastStopped);
+  $("save").disabled = saved; $("fileBtn").disabled = saved || recording; $("run").disabled = saved || transcribing; $("recBtn").disabled = saved;
+  for (const el of $("result").querySelectorAll("input, select, textarea")) el.disabled = saved;
+  bodyBox.contentEditable = saved ? "false" : BODY_MODE;
+  if (!recording) $("recBtn").textContent = draft.input.trim() ? "● 続けて録音する" : "● 録音を始める";
+  $("nextRow").hidden = !saved;
+  if (saved) setStatus(savedText(draft.saved), draft.saved.warn ? "err" : "ok");
+  recInfo();
+}
+function savedText(r) {
+  const p = [];
+  if (r.events) p.push(`予定${r.events}件をGoogleカレンダーに`);
+  if (r.items) p.push(`項目${r.items}件をまとめに`);
+  return `保存しました(${p.length ? p.join("、") : "メモだけ"})` + (r.warn ? "。" + r.warn : "");
+}
+
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove("show"), 1500);
+}
+function setStatus(msg, cls = "") { const s = $("status"); s.textContent = msg; s.className = cls; }
+
+async function post(path, body) {
+  let res;
+  try {
+    res = await fetch((settings.api || DEFAULT_API).replace(/\/$/, "") + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Passphrase": settings.pass || "", "X-Device": encodeURIComponent(settings.device || "") },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error("サーバーにつながりません。通信状態と設定を確認してください");
+  }
+  const data = await res.json().catch(() => ({ error: `サーバーの応答を読めませんでした(${res.status})` }));
+  if (!res.ok || data.error) throw new Error(data.error || `エラー(${res.status})`);
+  return data;
+}
+
+let busy = false;
+async function withBusy(label, fn) {
+  if (busy) return;
+  busy = true; for (const id of ["run", "save"]) $(id).disabled = true;
+  const t0 = Date.now();
+  const tick = setInterval(() => setStatus(`${label}… ${Math.round((Date.now() - t0) / 1000)}秒`), 500);
+  setStatus(`${label}…`);
+  try { await fn(); }
+  catch (e) { setStatus(e.message, "err"); }
+  finally { clearInterval(tick); busy = false; render(); if ($("status").className === "") setStatus(""); }
+}
+
+function run() {
+  if (recording || sending || queue.length || (waitLast && !lastStopped)) { setStatus("文字起こしが終わるまでお待ちください", "err"); return; }
+  const text = input.value.trim();
+  if (!text) { setStatus("話した内容がありません", "err"); return; }
+  withBusy("まとめて仕分けています", async () => {
+    const start = new Date(draft.startedAt || Date.now());
+    const data = await post("/api/summarize", { text, date: dateLabel(start), model: settings.model || "opus" });
+    const m = data.memo;
+    // 予定・項目は最初はすべて ☑(確信のない予定もそのまま。確認の印を出す)
+    m.events = m.events.map((e) => ({ ...e, on: true }));
+    m.items = m.items.map((it) => ({ ...it, on: true }));
+    draft.memo = m;
+    const runs = (draft.meta && draft.meta.runs) || [];
+    draft.meta = { stt: draft.stt || 0, model: data.label, yen: data.yen, sec: data.sec, runs: [...runs, data.yen] };
+    saveDraft();
+    setStatus("できました。☑ と中身を確かめてから「保存する」を押してください", "ok");
+  });
+}
+
+function save() {
+  withBusy("保存しています", async () => {
+    readMemoFields(); saveDraft();
+    const m = draft.memo;
+    const events = m.events.filter((e) => e.on && e.title.trim() && e.date).map(({ on, unsure, ...e }) => e);
+    const items = m.items.filter((it) => it.on && it.title.trim()).map(({ on, ...it }) => it);
+    const memo = { title: m.title, summary: m.summary, body: m.body, tags: m.tags, needs_check: m.needs_check };
+    const data = await post("/api/save", { memo, said: draft.input, iso: isoLocal(new Date(draft.startedAt || Date.now())), events, items });
+    draft.saved = { events: data.events, items: data.items, warn: data.warn || "" };
+    if (draft.mood) await post("/api/mood", { mood: draft.mood, date: ymd(new Date(draft.startedAt || Date.now())), memoId: data.memoId }).catch(() => {});
+    saveDraft();
+    toast("保存しました");
+  });
+}
+
+function reset(auto = false) {
+  if (recording) return;
+  draft = emptyDraft();
+  failed = []; queue = []; doneCount = 0; $("retryBtn").hidden = true;
+  store.del("hisho:draft"); setStatus(""); render();
+  if (!auto) input.focus(); // 自動で空にしたときはキーボードを開かない
+}
+
+// ---- 話す画面を自動で空にする:保存したものは5分、保存していないものは⚙設定の時間(初期値60分)触らなければ ----
+const SAVED_CLEAR_MIN = 5;
+function autoClear() {
+  if (recording || sending || queue.length || failed.length || busy || (waitLast && !lastStopped)) return;
+  if (!draft.input && !draft.memo) return;
+  const min = draft.saved ? SAVED_CLEAR_MIN : Number(settings.clearMin ?? 60);
+  if (!draft.t) { saveDraft(); return; } // 時刻のない古い書きかけは、今から数える
+  if (!min || Date.now() - draft.t < min * 60e3) return;
+  reset(true);
+  if (!$("pageSpeak").hidden) toast(draft.saved ? "保存した内容を片付けました" : "前の話した内容を消しました");
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") autoClear(); });
+setInterval(autoClear, 30e3);
+
+// ---- 録音(音声メモと同じ作り)。無音でも止まらない。1分ごとに区切って文字起こしに送る ----
+const SEGMENT_MS = 60 * 1000;
+let recording = false, stream = null, recorder = null, segTimer = null, clock = null, wakeLock = null, recStart = 0;
+let queue = [], failed = [], sending = false, doneCount = 0;
+let waitLast = false, lastStopped = false, lenAtStart = 0;
+let firstSeg = false;
+
+function pickType() {
+  for (const t of ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"]) if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t;
+  return "";
+}
+const mmss = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
+function recInfo() {
+  const parts = [];
+  if (recording) parts.push(`● 録音中 ${mmss(Date.now() - recStart)}`);
+  if (doneCount) parts.push(`文字にした区切り ${doneCount}本`);
+  if (sending || queue.length || (waitLast && !lastStopped)) parts.push("文字起こし中…");
+  if (failed.length) parts.push(`失敗 ${failed.length}本`);
+  $("recStatus").textContent = parts.length ? parts.join("・") : "録音は黙っていても止まりません。止めると文字になって下の欄に追記されます。";
+}
+async function keepAwake() { try { wakeLock = await navigator.wakeLock?.request("screen"); } catch { wakeLock = null; } }
+// ほかのアプリに移ったり画面を消したりすると、iPhone がマイクを止める(Webアプリの決まり)。
+// 戻ってきたらマイクを取り直して録音を続け、録れていなかった時間を知らせる
+let hiddenAt = 0, micCut = false;
+document.addEventListener("visibilitychange", () => {
+  if (!recording) return;
+  if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+  keepAwake();
+  resumeIfCut();
+});
+// 音が入っているかの見張り。Bluetooth のイヤホン(ケースの中など)にマイクが切り替わっていると無音で録れてしまうので、
+// 録音を始めて(録り直して)から5秒、音がまったく来なければ知らせる。一度でも音が来たら、あとは黙っている間も知らせない
+let levelCtx = null, levelSrc = null, levelTimer = null, heard = false, quietSince = 0, noSoundShown = false;
+const HEARD = 0.01;
+function watchLevel() {
+  stopLevel();
+  if (!levelCtx || !stream) return;
+  levelSrc = levelCtx.createMediaStreamSource(stream);
+  const an = levelCtx.createAnalyser();
+  an.fftSize = 2048;
+  levelSrc.connect(an);
+  const buf = new Float32Array(an.fftSize);
+  heard = false; quietSince = Date.now();
+  levelTimer = setInterval(() => {
+    if (heard || levelCtx.state !== "running") return;
+    an.getFloatTimeDomainData(buf);
+    let peak = 0;
+    for (const v of buf) peak = Math.max(peak, Math.abs(v));
+    if (peak >= HEARD) { heard = true; if (noSoundShown) { noSoundShown = false; setStatus(""); } }
+    else if (Date.now() - quietSince > 5000 && !noSoundShown) {
+      noSoundShown = true;
+      setStatus("音が入っていません。Bluetoothのイヤホンにつながっていませんか?(コントロールセンターでBluetoothを切ってから録り直してください)", "err");
+    }
+  }, 200);
+}
+function stopLevel() { clearInterval(levelTimer); levelTimer = null; levelSrc?.disconnect(); levelSrc = null; }
+function watchMic() {
+  watchLevel();
+  const t = stream?.getAudioTracks()[0];
+  if (!t) return;
+  t.onmute = t.onended = () => { micCut = true; if (document.visibilityState === "visible") resumeIfCut(); };
+}
+async function resumeIfCut() {
+  const t = stream?.getAudioTracks()[0], away = hiddenAt ? Math.round((Date.now() - hiddenAt) / 1000) : 0;
+  const alive = t && t.readyState === "live" && !t.muted;
+  const note = () => setStatus(`画面を離れていた${away >= 60 ? `約${Math.round(away / 60)}分` : away ? `${away}秒` : "あいだ"}は録音できていません。録音は続けています`, "err");
+  hiddenAt = 0;
+  if (alive) { if (micCut) note(); micCut = false; return; }
+  micCut = false;
+  clearInterval(segTimer);
+  try { if (recorder && recorder.state !== "inactive") recorder.stop(); } catch {}
+  stream?.getTracks().forEach((x) => x.stop());
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+  catch { stream = null; recorder = null; stopRecording(); setStatus("マイクが止まりました。もう一度「録音を始める」を押してください", "err"); return; }
+  if (!recording) { stream.getTracks().forEach((x) => x.stop()); return; }
+  watchMic();
+  startSegment();
+  segTimer = setInterval(() => { recorder.stop(); startSegment(); }, SEGMENT_MS);
+  note();
+}
+
+// ---- 📂 音声ファイルの読み込み(ボイスメモなど、画面を消しても録れるアプリで録ったもの) ----
+// iPhone の中で1分ごとに区切り(16kHz・モノラルの WAV)、録音と同じ順番待ちに入れて文字にする。1回60分まで(メモリーのため)
+const FILE_MAX_MIN = 60, YEN_PER_MIN = 0.0045 * 150;
+function wavBlob(x, rate) {
+  const b = new ArrayBuffer(44 + x.length * 2), v = new DataView(b);
+  const w = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + x.length * 2, true); w(8, "WAVE"); w(12, "fmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  w(36, "data"); v.setUint32(40, x.length * 2, true);
+  for (let i = 0; i < x.length; i++) { const s = Math.max(-1, Math.min(1, x[i])); v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true); }
+  return new Blob([b], { type: "audio/wav" });
+}
+$("fileBtn").onclick = () => { if (!recording && !busy && !draft.saved) $("fileIn").click(); };
+$("fileIn").onchange = async () => {
+  const f = $("fileIn").files[0];
+  $("fileIn").value = "";
+  if (!f) return;
+  setStatus("音声を読み込んでいます…");
+  let buf;
+  try { buf = await new OfflineAudioContext(1, 1, 16000).decodeAudioData(await f.arrayBuffer()); }
+  catch { setStatus("この音声ファイルは読み込めませんでした(ボイスメモの m4a などを選んでください)", "err"); return; }
+  const min = buf.duration / 60;
+  if (min > FILE_MAX_MIN) { setStatus(`${FILE_MAX_MIN}分までの音声にしてください(この音声は約${Math.round(min)}分)`, "err"); return; }
+  setStatus("");
+  if (!confirm(`約${Math.max(1, Math.round(min))}分の音声を文字にします(文字起こし 約${Math.max(1, Math.round(min * YEN_PER_MIN))}円)。よろしいですか?`)) return;
+  // 1つにまとめる(ステレオなら平均)
+  const n = buf.length, mono = buf.numberOfChannels === 1 ? buf.getChannelData(0) : new Float32Array(n);
+  if (buf.numberOfChannels > 1) for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < n; i++) mono[i] += d[i] / buf.numberOfChannels; }
+  // 話した日時は、ファイルの日時(録り終えた時刻)から長さを引いたもの。おかしければ今
+  if (!draft.startedAt) { const st = f.lastModified - buf.duration * 1000; draft.startedAt = st > Date.now() - 30 * 864e5 && st < Date.now() ? st : Date.now(); saveDraft(); }
+  lenAtStart = draft.input.length; waitLast = true; lastStopped = true;
+  const step = 16000 * SEGMENT_MS / 1000;
+  for (let i = 0; i < n; i += step) { const b = wavBlob(mono.subarray(i, Math.min(n, i + step)), 16000); b.rec = i === 0; queue.push(b); }
+  render(); recInfo(); sendQueue();
+};
+
+function startSegment() {
+  const type = pickType();
+  const r = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+  const parts = [], first = firstSeg;
+  firstSeg = false;
+  r.ondataavailable = (e) => { if (e.data && e.data.size) parts.push(e.data); };
+  r.onstop = () => {
+    if (!recording) lastStopped = true;
+    if (parts.length) { const b = new Blob(parts, { type: r.mimeType || type }); b.rec = first; queue.push(b); sendQueue(); } else afterRecording();
+  };
+  r.start();
+  recorder = r;
+}
+async function startRecording() {
+  if (!window.MediaRecorder || !navigator.mediaDevices?.getUserMedia) { setStatus("この画面では録音できません。Safariのタブで開いてください", "err"); return; }
+  // 音の見張り用。iPhone では押した直後に作らないと動かないので、マイクを待つ前に用意する
+  try { levelCtx = levelCtx || new (window.AudioContext || window.webkitAudioContext)(); levelCtx.resume(); } catch { levelCtx = null; }
+  noSoundShown = false;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+  catch { setStatus("マイクを使えませんでした。マイクの使用を許可してください", "err"); return; }
+  recording = true; recStart = Date.now(); waitLast = false; lastStopped = false; lenAtStart = draft.input.length; firstSeg = true;
+  if (!draft.startedAt) { draft.startedAt = recStart; saveDraft(); }
+  $("recBtn").textContent = "■ 録音を止める"; $("recBtn").classList.add("on");
+  setStatus(""); render();
+  hiddenAt = 0; micCut = false; watchMic();
+  startSegment();
+  segTimer = setInterval(() => { recorder.stop(); startSegment(); }, SEGMENT_MS);
+  clock = setInterval(recInfo, 1000);
+  keepAwake();
+}
+function stopRecording() {
+  clearInterval(segTimer); clearInterval(clock);
+  recording = false; waitLast = true;
+  if (recorder) recorder.stop(); else lastStopped = true;
+  stream?.getTracks().forEach((t) => t.stop());
+  stopLevel();
+  wakeLock?.release?.(); wakeLock = null;
+  $("recBtn").classList.remove("on");
+  render();
+}
+$("recBtn").onclick = () => (recording ? stopRecording() : startRecording());
+
+async function sendQueue() {
+  if (sending || failed.length) return;
+  sending = true; render();
+  while (queue.length) {
+    const blob = queue[0];
+    let data = null, err = "";
+    for (let i = 0; i < 3 && !data; i++) {
+      try {
+        const res = await fetch((settings.api || DEFAULT_API).replace(/\/$/, "") + "/api/transcribe" + (blob.rec ? "?rec=1" : ""), {
+          method: "POST", headers: { "Content-Type": blob.type.split(";")[0], "X-Passphrase": settings.pass || "", "X-Device": encodeURIComponent(settings.device || "") }, body: blob,
+        });
+        const d = await res.json().catch(() => ({ error: `サーバーの応答を読めませんでした(${res.status})` }));
+        if (!res.ok || d.error) { err = d.error || `エラー(${res.status})`; if (res.status < 500) break; }
+        else data = d;
+      } catch { err = "サーバーにつながりません"; }
+      if (!data && i < 2) await new Promise((ok) => setTimeout(ok, 1500 * (i + 1)));
+    }
+    queue.shift();
+    if (!data) { failed.push(blob, ...queue); queue = []; $("retryBtn").hidden = false; setStatus("文字起こしに失敗しました:" + err, "err"); break; }
+    if (data.text) {
+      draft.input += (draft.input && !draft.input.endsWith("\n") ? "\n" : "") + data.text;
+      input.value = draft.input; $("count").textContent = draft.input.length + "字";
+    }
+    doneCount++; draft.stt = (draft.stt || 0) + (data.yen || 0); saveDraft();
+    recInfo();
+  }
+  sending = false; render(); afterRecording();
+}
+$("retryBtn").onclick = () => { queue = failed.concat(queue); failed = []; $("retryBtn").hidden = true; setStatus(""); sendQueue(); };
+function afterRecording() {
+  if (!waitLast || !lastStopped || recording || sending || queue.length || failed.length) return;
+  waitLast = false; render();
+  if (draft.input.length > lenAtStart) setStatus("文字にしました。直したり続けて録音したりしてから「まとめて仕分ける」を押してください", "ok");
+  else setStatus("聞き取れませんでした。もう一度録音してください", "err");
+}
+
+$("run").onclick = run;
+$("save").onclick = save;
+$("next").onclick = reset;
+$("clear").onclick = () => {
+  if ((draft.input || draft.memo) && !draft.saved && !confirm("話した内容とまとめを消します。よろしいですか?")) return;
+  reset();
+};
+input.addEventListener("input", () => {
+  if (!draft.startedAt && input.value) draft.startedAt = Date.now();
+  if (!input.value) draft.startedAt = null;
+  draft.input = input.value; $("count").textContent = input.value.length + "字"; saveDraft();
+});
+for (const id of ["title", "tags", "summary", "body"]) {
+  $(id).addEventListener("input", (e) => { if (e.target.tagName === "TEXTAREA") grow(e.target); if (id === "body") unmarkEdited(); if (draft.memo) { readMemoFields(); saveDraft(); } });
+}
+
+// ---- 📋 まとめ ----
+const VIEWS = [
+  ["todo", "✅ やること", ["やること"]], ["idea", "💡 アイデア", ["アイデア"]], ["goal", "🎯 目標", ["目標・人生設計"]],
+  ["people", "🤝 人・約束", ["人・約束"]], ["learn", "📚 学び", ["学び"]], ["shop", "🛒 買い物", ["買い物・欲しいもの"]],
+  ["record", "📖 記録", []], // 分野は個人の設定から(applyProfile)
+];
+// チェックで完了にできる分野
+const CHECKABLE = ["やること", "人・約束", "学び", "買い物・欲しいもの"];
+let view = store.get("hisho:view") || "todo", listItemsCache = [];
+if (!VIEWS.some((v) => v[0] === view)) view = "todo";
+$("chips").innerHTML = VIEWS.map(([k, label]) => `<button data-v="${k}">${label}</button>`).join("");
+$("chips").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { view = b.dataset.v; store.set("hisho:view", view); loadList(); } });
+$("showDone").onchange = loadList;
+const fillCatSelect = () => ($("itCat").innerHTML = CATEGORIES.map((c) => `<option>${c}</option>`).join(""));
+
+const todayStr = () => ymd(new Date());
+// 今週の日曜(週は月曜始まり)
+const weekEnd = () => { const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7)); return ymd(d); };
+function rowHtml(it, mode = view) {
+  const over = it.status !== "完了" && it.due && it.due < todayStr();
+  const dl = detailLines(it.detail);
+  // くわしくが2行以上なら「中身N件」、1行なら短く
+  const det = dl.length > 1 ? `中身${dl.length}件 ›` : dl[0] ? esc(dl[0].length > 40 ? dl[0].slice(0, 40) + "…" : dl[0]) : "";
+  const sub = [it.area, it.kind, it.person && "👤" + it.person, it.due && `<span class="due">期限 ${md(it.due)}</span>`, det, mode !== "todo" && it.item_date && md(it.item_date)].filter(Boolean);
+  return `<div class="lrow${it.status === "完了" ? " done" : ""}${over ? " over" : ""}" data-id="${it.id}">
+    ${CHECKABLE.includes(it.category) && it.status !== "完了" ? `<span class="star${it.focused ? " on" : ""}" role="button" aria-label="今やることに入れる">${it.focused ? "★" : "☆"}</span>` : ""}
+    ${CHECKABLE.includes(it.category) ? `<input type="checkbox" ${it.status === "完了" ? "checked" : ""} aria-label="完了">` : ""}
+    <div class="tx"><span>${esc(it.title)}</span>${sub.length ? `<small>${sub.map((x) => (x.startsWith("<") ? x : esc(x))).join("・")}</small>` : ""}</div></div>`;
+}
+function group(title, items, cls = "") { return items.length ? `<div class="group"><h3 class="${cls}">${title} <small>${items.length}</small></h3>${items.map(rowHtml).join("")}</div>` : ""; }
+async function loadList() {
+  for (const b of $("chips").children) b.classList.toggle("on", b.dataset.v === view);
+  const v = VIEWS.find((x) => x[0] === view) || VIEWS[0];
+  $("showDone").parentElement.hidden = view === "record" || view === "goal" || view === "idea";
+  if (!$("list").children.length) $("list").innerHTML = `<div class="muted">読み込み中…</div>`;
+  try {
+    const { items } = await post("/api/items", { categories: v[2], status: $("showDone").checked || !CHECKABLE.includes(v[2][0]) ? "" : "未着手" });
+    listItemsCache = items;
+    if (view !== v[0]) return;
+    if (!items.length) { $("list").innerHTML = `<div class="soon">まだありません。🎤で話すと、ここにたまっていきます</div>`; return; }
+    if (view === "todo") {
+      const t = todayStr(), tm = addDays(t, 1), we = weekEnd(), nwe = addDays(we, 7), open = items.filter((i) => i.status !== "完了");
+      const byDue = (a, b) => (a.due || "9").localeCompare(b.due || "9") || b.id - a.id;
+      $("list").innerHTML =
+        group("⚠️ 期限切れ", open.filter((i) => i.due && i.due < t).sort(byDue), "over") +
+        group("今日", open.filter((i) => i.due === t)) +
+        group("明日", open.filter((i) => i.due === tm)) +
+        group("今週", open.filter((i) => i.due > tm && i.due <= we).sort(byDue)) +
+        group("来週", open.filter((i) => i.due > we && i.due > tm && i.due <= nwe).sort(byDue)) +
+        group("それ以降", open.filter((i) => i.due > nwe).sort(byDue)) +
+        group("期限なし", open.filter((i) => !i.due)) +
+        group("完了", items.filter((i) => i.status === "完了"));
+    } else if (view === "record") {
+      $("list").innerHTML = v[2].map((c) => group(`${ICON[c]} ${c}`, items.filter((i) => i.category === c))).join("");
+    } else {
+      $("list").innerHTML = group("未完了", items.filter((i) => i.status !== "完了")) + group("完了", items.filter((i) => i.status === "完了"));
+      if (!CHECKABLE.includes(v[2][0])) $("list").innerHTML = items.map(rowHtml).join("");
+    }
+  } catch (e) { $("list").innerHTML = `<div class="soon">${esc(e.message)}</div>`; }
+}
+// 今いる画面(ホームか一覧)を読み直す
+const refreshCurrent = () => (!$("pageHome").hidden ? loadHome() : loadList());
+let homeCache = [];
+for (const box of ["list", "home"]) {
+  $(box).addEventListener("change", async (e) => {
+    const row = e.target.closest(".lrow");
+    if (!row || e.target.type !== "checkbox") return;
+    try {
+      await post("/api/item", { action: "update", id: row.dataset.id, item: { status: e.target.checked ? "完了" : "未着手" } });
+      if (e.target.checked) toast("完了にしました");
+      setTimeout(refreshCurrent, e.target.checked ? 500 : 0);
+    } catch (err) { e.target.checked = !e.target.checked; alert(err.message); }
+  });
+  $(box).addEventListener("click", async (e) => {
+    const star = e.target.closest(".star");
+    if (star) {
+      const on = !star.classList.contains("on");
+      try { await post("/api/item", { action: "focus", id: star.closest(".lrow").dataset.id, on }); toast(on ? "今やることに入れました" : "今やることから外しました"); refreshCurrent(); }
+      catch (err) { alert(err.message); }
+      return;
+    }
+    const tx = e.target.closest(".tx");
+    if (!tx) return;
+    const id = tx.closest(".lrow").dataset.id;
+    openItem([...listItemsCache, ...homeCache].find((i) => String(i.id) === id));
+  });
+}
+// 項目の追加・修正・削除
+let itEditing = null;
+function openItem(it) {
+  itEditing = it;
+  const v = VIEWS.find((x) => x[0] === view);
+  $("itemDlgTitle").textContent = it ? "項目を直す" : "項目を追加";
+  $("itName").value = it?.title || ""; $("itCat").value = it?.category || (v?.[2]?.[0] ?? "やること");
+  $("itDue").value = it?.due || ""; $("itPerson").value = it?.person || ""; $("itDetail").value = it?.detail || "";
+  $("itDel").hidden = !it;
+  $("itemDlg").showModal();
+}
+$("addItem").onclick = () => openItem(null);
+$("itCancel").onclick = () => $("itemDlg").close();
+$("itSave").onclick = async () => {
+  const item = { title: $("itName").value.trim(), category: $("itCat").value, due: $("itDue").value, person: $("itPerson").value.trim(), detail: $("itDetail").value.trim() };
+  if (!item.title) { alert("項目を入れてください"); return; }
+  try {
+    await post("/api/item", itEditing ? { action: "update", id: itEditing.id, item } : { action: "add", item });
+    $("itemDlg").close(); toast(itEditing ? "直しました" : "追加しました"); refreshCurrent();
+  } catch (e) { alert(e.message); }
+};
+$("itDel").onclick = async () => {
+  if (!confirm(`「${itEditing.title}」を削除します。(30日間は⚙設定のゴミ箱から戻せます)`)) return;
+  try { await post("/api/item", { action: "delete", id: itEditing.id }); $("itemDlg").close(); toast("削除しました"); refreshCurrent(); } catch (e) { alert(e.message); }
+};
+// 📝 話したメモの一覧(月ごと)と中身
+let memoTimer = null;
+async function loadMemos() {
+  const q = $("memoSearch").value.trim();
+  try {
+    const { memos } = await post("/api/memos", { q });
+    if (q !== $("memoSearch").value.trim()) return; // 打っている途中で変わった
+    let html = "", month = "";
+    for (const m of memos) {
+      const d = new Date(m.memo_at), sum = JSON.parse(m.summary || "[]");
+      const mk = `${d.getFullYear()}年${d.getMonth() + 1}月`;
+      if (mk !== month) { month = mk; html += `<div class="mgroup">${mk}${m.source === "notion" ? "" : ""}</div>`; }
+      // 検索中で、題と要点に言葉がないときは、本文・話した言葉の見つかったところを出す
+      const words = searchWords(), shown = m.title + (sum[0] || "");
+      const line = words.length && m.snippet && !words.some((w) => shown.includes(w)) ? m.snippet : sum[0] || "";
+      html += `<div class="lrow" data-memo="${m.id}"><div class="tx"><span>${esc(m.title)}</span><small>${md(ymd(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}${line ? "・" + esc(line) : ""}${m.source === "notion" ? "・Notionから" : ""}</small></div></div>`;
+    }
+    $("memoList").innerHTML = html || `<div class="soon">${q ? "見つかりませんでした" : "まだメモがありません"}</div>`;
+    markHits($("memoList"));
+    $("memoSearchBar").hidden = !q;
+    $("memoSearchInfo").textContent = q ? `「${q}」の検索結果 ${memos.length}件` : "";
+  } catch (e) { $("memoList").innerHTML = `<div class="soon">${esc(e.message)}</div>`; }
+}
+$("memoSearch").addEventListener("input", () => { clearTimeout(memoTimer); memoTimer = setTimeout(loadMemos, 350); });
+$("memoSearchClear").onclick = () => { $("memoSearch").value = ""; loadMemos(); };
+// 検索している間だけ、見つかった言葉にマーカー(一覧と、開いたメモの中)
+const searchWords = () => $("memoSearch").value.trim().split(/\s+/).filter(Boolean).slice(0, 5);
+function markHits(root) {
+  const words = searchWords();
+  if (!words.length) return;
+  const re = new RegExp(words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "g");
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), nodes = [];
+  while (walker.nextNode()) if (walker.currentNode.nodeValue.search(re) >= 0) nodes.push(walker.currentNode); // test() は g 付きだと位置を覚えて取りこぼすので search
+  for (const n of nodes) {
+    const frag = document.createDocumentFragment(), t = n.nodeValue;
+    let last = 0;
+    t.replace(re, (hit, i) => { frag.append(t.slice(last, i)); const mk = document.createElement("mark"); mk.className = "hit"; mk.textContent = hit; frag.append(mk); last = i + hit.length; });
+    frag.append(t.slice(last));
+    n.replaceWith(frag);
+  }
+  // 話した言葉の中だけに見つかったときは、開いて見せる
+  for (const d of root.querySelectorAll("details")) if (d.querySelector("mark.hit")) d.open = true;
+}
+$("memoList").addEventListener("click", (e) => { const r = e.target.closest(".lrow[data-memo]"); if (r) openMemo(r.dataset.memo); });
+async function openMemo(id) {
+  try {
+    const { memo: m, items } = await post("/api/memo", { id });
+    const d = new Date(m.memo_at);
+    $("mdTitle").textContent = m.title;
+    $("mdDate").textContent = `${md(ymd(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const sum = JSON.parse(m.summary || "[]");
+    $("mdBody").innerHTML = (sum.length ? `<div class="lbl">要点</div><ul>${sum.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "") +
+      `<div class="lbl">本文</div><div class="memo-body">${esc(m.body).replace(/〘([^〘〙\n]*)〙/g, '<mark class="guess">$1</mark>')}</div>` +
+      (items.length ? `<div class="lbl">仕分けた項目</div><ul>${items.map((i) => `<li>${ICON[i.category] || ""} ${esc(i.title)}${i.category === "予定" ? " " + md(i.item_date) : ""}</li>`).join("")}</ul>` : "") +
+      `<details style="margin-top:10px"><summary class="muted">元の話し言葉</summary><div class="memo-body muted">${esc(m.said)}</div></details>`;
+    // コピーするのは、人に送れる形の「題・要点・本文」(仕分けた項目と話し言葉は入れない。〘〙の印は外す)
+    memoCopyText = [m.title, sum.length ? sum.map((x) => "・" + x).join("\n") : "", String(m.body || "").replace(/[〘〙]/g, "")].filter(Boolean).join("\n\n");
+    markHits($("memoDlg"));
+    $("memoDlg").showModal();
+  } catch (e) { alert(e.message); }
+}
+let memoCopyText = "";
+$("mdClose").onclick = () => $("memoDlg").close();
+
+// ---- 小窓(dialog)共通 ----
+// 開いている間は後ろの画面がスクロールしないよう止め、閉じたら元の位置に戻す
+let lockY = 0;
+new MutationObserver(() => {
+  const open = !!document.querySelector("dialog[open]"), locked = document.body.classList.contains("dlg-lock");
+  if (open && !locked) { lockY = window.scrollY; document.body.style.top = `-${lockY}px`; document.body.classList.add("dlg-lock"); }
+  if (!open && locked) { document.body.classList.remove("dlg-lock"); document.body.style.top = ""; window.scrollTo(0, lockY); }
+}).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open"] });
+// 見るだけの小窓(メモ・その日の予定)は、外側を押すと閉じる。直す小窓は書きかけが消えないよう閉じない
+for (const id of ["memoDlg", "dayDlg"]) {
+  $(id).addEventListener("click", (e) => {
+    if (e.target !== $(id)) return;
+    const r = $(id).getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) $(id).close();
+  });
+}
+$("mdCopy").onclick = async () => {
+  try { await navigator.clipboard.writeText(memoCopyText); }
+  catch {
+    // 古いSafariなど clipboard が使えないとき
+    const t = document.createElement("textarea");
+    t.value = memoCopyText; $("memoDlg").append(t); t.select(); document.execCommand("copy"); t.remove();
+  }
+  // 開いている間は画面の一番上に出るので、知らせはボタンの文字で出す
+  $("mdCopy").textContent = "✓ コピーしました";
+  setTimeout(() => ($("mdCopy").textContent = "📋 コピー"), 2000);
+};
+
+// ---- 🏠 ホーム(一画面で見渡す) ----
+function openList(v) { view = v; store.set("hisho:view", view); showPage("pageList"); }
+async function loadHome() {
+  const d = new Date();
+  $("homeDate").textContent = `${d.getMonth() + 1}月${d.getDate()}日(${WEEK[d.getDay()]})`;
+  if (!$("home").children.length) $("home").innerHTML = `<div class="muted">読み込み中…</div>`;
+  try {
+    const h = await post("/api/home", { today: todayStr() });
+    homeCache = [...h.focus, ...h.todos, ...h.ideas.latest, ...h.shop.latest];
+    const t = todayStr(), tm = addDays(t, 1), we = addDays(t, 6);
+    const notFocus = h.todos.filter((i) => !i.focused);
+    const byDue = (a, b) => (a.due || "9").localeCompare(b.due || "9") || b.id - a.id;
+    const soon = notFocus.filter((i) => i.due && i.due <= tm).sort(byDue), week = notFocus.filter((i) => i.due > tm && i.due <= we).sort(byDue);
+    // ToDo は毎日パッと見えるように、期限の近いものから10件まで(足りなければ先の期限・期限なしで埋める)
+    const TODO_MAX = 10, later = notFocus.filter((i) => !i.due || i.due > we).sort(byDue);
+    const soonShow = soon.slice(0, TODO_MAX), weekShow = week.slice(0, TODO_MAX - soonShow.length), laterShow = later.slice(0, TODO_MAX - soonShow.length - weekShow.length);
+    const todoRest = notFocus.length - soonShow.length - weekShow.length - laterShow.length;
+    const rows = (list) => list.map((i) => rowHtml(i, "todo")).join("");
+    const goalTag = (k) => (k.startsWith("長期") ? "3年" : k.startsWith("中期") ? "1年" : k.startsWith("短期") ? "今月" : "大切");
+    $("home").innerHTML =
+      (h.leave?.due ? `<button class="leavedue" data-leave>🌴 今月分の有給が、まだ記録されていません(残り${fmtDays(h.leave.left)}日) ›</button>` : "") +
+      `<div class="wg now"><div class="wgt"><span>⭐ 今やること</span><button data-open="todo">選ぶ ›</button></div>` +
+      (h.focus.length ? rows(h.focus) : `<div class="empty">ToDoの☆を押すと、ここに入ります(3つまで)</div>`) + `</div>` +
+      `<div class="wg"><div class="wgt"><span>✅ ToDo</span><button data-open="todo">すべて ${h.todos.length} ›</button></div>` +
+      (soonShow.length ? `<div class="g">期限切れ・今日・明日</div>${rows(soonShow)}` : "") +
+      (weekShow.length ? `<div class="g">1週間以内</div>${rows(weekShow)}` : "") +
+      (laterShow.length ? `<div class="g">それ以降・期限なし</div>${rows(laterShow)}` : "") +
+      (!notFocus.length ? `<div class="empty">ToDoはありません</div>` : "") +
+      (todoRest > 0 ? `<button class="link more-todo" data-open="todo">ほか ${todoRest}件を見る ›</button>` : "") + `</div>` +
+      `<div class="wg"><div class="wgt"><span>💡 アイデア</span><button data-open="idea">すべて ${h.ideas.count} ›</button></div>` +
+      (h.ideas.latest.length ? rows(h.ideas.latest) : `<div class="empty">まだありません</div>`) + `</div>` +
+      `<div class="wg"><div class="wgt"><span>🎯 目標</span><button data-open="goal">すべて ${h.goals.count} ›</button></div>` +
+      (h.goals.show.length ? h.goals.show.map((g) => `<div class="goalrow"><span>${goalTag(g.kind)}</span>${esc(g.title)}</div>`).join("") : `<div class="empty">まだありません</div>`) +
+      `<button class="notebtn" data-note><span>📓 秘書ノート <small>目標・大切な考え・声かけの好み</small></span><span class="go">›</span></button>` + `</div>` +
+      `<div class="minis">` +
+      `<button class="mini" data-open="people"><b>🤝 人・約束</b><span class="n">${h.people.count}</span>${h.people.waiting ? `うち返事待ち ${h.people.waiting}` : "件"}</button>` +
+      `<button class="mini" data-open="shop"><b>🛒 買い物</b><span class="n">${h.shop.count}</span>${esc(h.shop.latest[0]?.title || "件")}</button>` +
+      `<button class="mini" data-open="learn"><b>📚 学び</b><span class="n">${h.learn.count}</span>件</button>` +
+      `<button class="mini" data-open="record"><b>📖 記録</b><span class="n">${h.records}</span>件${PROFILE?.recordHint ? `(${esc(PROFILE.recordHint)})` : ""}</button>` +
+      `</div>`;
+  } catch (e) { $("home").innerHTML = `<div class="soon">${esc(e.message)}</div>`; }
+}
+$("home").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-open]");
+  if (b) openList(b.dataset.open);
+  if (e.target.closest("[data-note]")) showPage("pageNote");
+});
+// 設定はホームと話す画面の右上から開く。戻る先(と下のタブの光り方)は開いた画面にする
+function openSettings(from) {
+  TAB_OF.pageSet = from;
+  $("setBack").textContent = from === "pageSpeak" ? "‹ 話す" : "‹ ホーム";
+  showPage("pageSet");
+}
+$("openSettings").onclick = () => openSettings("pageHome");
+$("openSettings2").onclick = () => openSettings("pageSpeak");
+
+// ---- ☀️ 朝のレポート ----
+// レポートは Markdown の簡単な形(**見出し**・「- 」の箇条書き・## 見出し)なので、それだけを表示用に直す
+function mdToHtml(text) {
+  const out = [];
+  let ul = false;
+  const inline = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+  for (const raw of String(text).split("\n")) {
+    const line = raw.trimEnd();
+    const li = line.match(/^\s*[-・*]\s+(.*)/);
+    if (li) { if (!ul) { out.push("<ul>"); ul = true; } out.push(`<li>${inline(li[1])}</li>`); continue; }
+    if (ul) { out.push("</ul>"); ul = false; }
+    if (!line.trim()) continue;
+    const h = line.match(/^#{1,4}\s+(.*)/) || line.match(/^\*\*(.+)\*\*$/);
+    out.push(h ? `<h4>${inline(h[1])}</h4>` : `<p>${inline(line)}</p>`);
+  }
+  if (ul) out.push("</ul>");
+  return out.join("");
+}
+async function loadReport(date) {
+  $("report").innerHTML = `<div class="muted">読み込み中…</div>`;
+  try {
+    const { dates, report } = await post("/api/reports", { date });
+    $("repDate").innerHTML = dates.map((d) => `<option value="${d}" ${d === report?.date ? "selected" : ""}>${md(d)}</option>`).join("");
+    $("repDate").hidden = !dates.length;
+    $("report").innerHTML = report ? mdToHtml(report.body) : `<div class="muted">まだレポートがありません。毎朝5時にMacが作って、ここに置きます。</div>`;
+  } catch (e) { $("report").innerHTML = `<div class="muted">${esc(e.message)}</div>`; }
+}
+$("repDate").onchange = () => loadReport($("repDate").value);
+
+// ---- 📅 カレンダー(Googleカレンダーが正本。表示のたびに読み直す。前回の分はこの端末に控えて、すぐ出す) ----
+const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const addDays = (s, n) => { const d = new Date(s + "T00:00:00"); d.setDate(d.getDate() + n); return ymd(d); };
+let calMonth = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })();
+let calData = { events: [], holidays: [] }, calLoaded = "";
+// 表示する6週間(月の1日を含む週の日曜から)
+function calRange() {
+  const first = new Date(calMonth); first.setDate(1 - first.getDay());
+  const start = ymd(first);
+  return { start, end: addDays(start, 41) };
+}
+// その月を表示するのに必要な週の数(5か6。一覧つきのときは余った週を出さずに、そのぶん枠を大きくする)
+function calWeeks() {
+  if (!calListOn) return 6;
+  const first = new Date(calMonth); first.setDate(1);
+  const days = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  return Math.ceil((first.getDay() + days) / 7);
+}
+function sizeCal() {
+  // 6週がちょうど画面に入る高さにする(見出し・曜日・下のタブの分を引く)
+  const top = $("calGrid").getBoundingClientRect().top + window.scrollY;
+  const room = window.innerHeight - top - 18 - 34 - 62;
+  const h = Math.max(calListOn ? 52 : 64, Math.floor((calListOn ? room * 0.62 : room) / calWeeks()));
+  $("calGrid").style.setProperty("--cellh", h + "px");
+  return h;
+}
+function renderCal() {
+  const { start } = calRange();
+  const today = ymd(new Date());
+  const month = calMonth.getMonth();
+  $("calTitle").textContent = `${calMonth.getFullYear()}年${month + 1}月`;
+  const cellH = sizeCal();
+  const hol = Object.fromEntries(calData.holidays.map((h) => [h.date, h.title]));
+  const multi = calData.events.filter((e) => e.end_date && e.end_date > e.date);
+  const single = calData.events.filter((e) => !(e.end_date && e.end_date > e.date));
+  let html = `<div class="wd">${[..."日月火水木金土"].map((w) => `<div>${w}</div>`).join("")}</div>`;
+  for (let w = 0, weeks = calWeeks(); w < weeks; w++) {
+    const ws = addDays(start, w * 7), we = addDays(ws, 6);
+    // 何日も続く予定は帯にする。重ならないように段を決める
+    const lanes = [], bands = [];
+    for (const e of multi.filter((e) => e.date <= we && e.end_date >= ws).sort((a, b) => a.date.localeCompare(b.date))) {
+      const s = e.date < ws ? ws : e.date, t = e.end_date > we ? we : e.end_date;
+      const c0 = Math.round((new Date(s) - new Date(ws)) / 864e5), c1 = Math.round((new Date(t) - new Date(ws)) / 864e5);
+      let lane = lanes.findIndex((end) => end < c0);
+      if (lane < 0) { lane = lanes.length; lanes.push(-1); }
+      lanes[lane] = c1;
+      bands.push(`<div class="band" style="left:calc(${c0} * 100% / 7 + 2px);width:calc(${c1 - c0 + 1} * 100% / 7 - 4px);top:${21 + lane * 16}px">${esc(e.title)}</div>`);
+    }
+    const lineH = 15.2, room = Math.max(0, Math.floor((cellH - 22 - lanes.length * 16) / lineH));
+    let cells = "";
+    for (let i = 0; i < 7; i++) {
+      const day = addDays(ws, i), dt = new Date(day + "T00:00:00");
+      const cls = ["d", dt.getMonth() !== month ? "out" : "", dt.getDay() === 0 ? "sun" : "", dt.getDay() === 6 ? "sat" : "", hol[day] ? "hol" : "", day === today ? "today" : ""].filter(Boolean).join(" ");
+      const lines = [];
+      if (hol[day]) lines.push(`<div class="h">${esc(hol[day])}</div>`);
+      for (const e of single.filter((e) => e.date === day)) lines.push(`<div class="e${e.calName ? " fam" : ""}">${esc(e.title)}</div>`);
+      for (const t of (calData.tasks || []).filter((t) => t.date === day)) lines.push(`<div class="e task${t.done ? " done" : ""}">${t.done ? "☑" : "☐"}${esc(t.title)}</div>`);
+      const shown = lines.length <= room ? lines : room <= 1 ? lines.slice(0, 1) : lines.slice(0, room - 1).concat(`<div class="more">ほか${lines.length - room + 1}件</div>`);
+      const wk = dt.getMonth() === month ? workOf(day) : { place: "" }; // ほかの月の日には出さない
+      cells += `<div class="${cls}" data-day="${day}"><div class="n">${dt.getDate()}${wk.place ? `<span class="wk ${WORK[wk.place].cls}${wk.manual ? " man" : ""}">${WORK[wk.place].short}</span>` : ""}</div><div style="height:${lanes.length * 16}px"></div>${shown.join("")}</div>`;
+    }
+    html += `<div class="week">${cells}${bands.join("")}</div>`;
+  }
+  $("calGrid").innerHTML = html;
+  renderWorkSum();
+  renderCalList();
+}
+async function loadCal() {
+  const { start, end } = calRange();
+  // 勤務日数は前の月の16日から数えるので、そこから読む(表示は start から)
+  const from = ymd(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, Math.min(31, ...Object.values(WORK).map((w) => w.close)) + 1));
+  const key = "hisho:cal:" + start;
+  const cached = store.get(key);
+  if (cached) { calData = cached; }
+  else if (calLoaded !== start) calData = { events: [], holidays: [] };
+  renderCal();
+  $("calStatus").textContent = cached ? "" : "読み込み中…"; // 控え(前回の表示)があるときは出さない(目障りなだけなので)
+  if (!leaveData) loadLeave();
+  try {
+    const [data, work] = await Promise.all([post("/api/calendar", { action: "list", start: from, end }), post("/api/work", { start: from, end }).catch(() => ({ overrides: {} }))]);
+    data.work = work.overrides || {};
+    if (calRange().start !== start) return; // 読み込み中に月を変えた
+    calData = data; calLoaded = start; store.set(key, data);
+    renderCal();
+    $("calStatus").textContent = data.tasksError ? "Googleのタスクはまだ読めません" : "";
+  } catch (e) { $("calStatus").textContent = (cached ? "前回の表示です。" : "") + e.message; }
+}
+function moveMonth(n) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + n, 1); loadCal(); }
+$("calPrev").onclick = () => moveMonth(-1);
+$("calNext").onclick = () => moveMonth(1);
+$("calToday").onclick = () => { const d = new Date(); calMonth = new Date(d.getFullYear(), d.getMonth(), 1); loadCal(); };
+// 左右に払って月を変える
+let touchX = null, touchY = null;
+$("calGrid").addEventListener("touchstart", (e) => { touchX = e.touches[0].clientX; touchY = e.touches[0].clientY; }, { passive: true });
+$("calGrid").addEventListener("touchend", (e) => {
+  if (touchX == null) return;
+  const dx = e.changedTouches[0].clientX - touchX, dy = e.changedTouches[0].clientY - touchY;
+  touchX = null;
+  if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) moveMonth(dx < 0 ? 1 : -1);
+});
+window.addEventListener("resize", () => { if (!$("pageCal").hidden) renderCal(); });
+
+// 日付を押すと、その日の予定の一覧
+let dayOpen = "";
+function timeText(e) {
+  const days = e.end_date && e.end_date > e.date ? `${md(e.date)}〜${md(e.end_date)} ` : "";
+  return days + (e.start ? `${e.start}${e.end ? "〜" + e.end : ""}` : "終日");
+}
+// ---- 勤務先(WORK は個人の設定から。days=曜日、close=締め日)。祝日と「休み」の予定は休み。その日だけ手で変えられる ----
+// 「11月分」は前の月の締め日の次の日から11月の締め日まで
+// 返り値 { place: 勤務先 or "", manual: 手で変えたか, why: 自動で決めた理由 }
+function workOf(day) {
+  const ov = calData.work?.[day];
+  if (ov) return { place: ov === "休み" || !WORK[ov] ? "" : ov, manual: true, why: "手で変更" };
+  const wd = new Date(day + "T00:00:00").getDay();
+  let place = Object.keys(WORK).find((k) => WORK[k].days.includes(wd)) || "";
+  // 1つの予定に「○○休み／夏休み／○○出勤」のように並べて書いてあることがあるので、区切って1つずつ見る
+  const titles = calData.events.filter((e) => e.date <= day && (e.end_date || e.date) >= day).flatMap((e) => e.title.split(/[／/、,]/)).map((t) => t.trim()).filter(Boolean);
+  // 「(勤務先の頭2文字)出勤」の予定があればその勤務先(いつもの曜日でなくても)
+  for (const k of Object.keys(WORK)) if (titles.some((t) => t.includes(k.slice(0, 2)) && t.includes("出勤"))) return { place: k, manual: false, why: "出勤の予定" };
+  if (!place) return { place: "", manual: false, why: "" };
+  const hol = calData.holidays.find((h) => h.date === day);
+  if (hol) return { place: "", manual: false, why: `祝日(${hol.title})` };
+  // 題が「仕事休み」「夏休み」などで始まる予定は全部休み(「○○さん夏休み」のような人の予定は数えない)。「(勤務先の頭2文字)休み」はその勤務先だけ休み
+  const off = titles.find((t) => /^(仕事休み|夏休み|冬休み|正月休み|年末年始|お盆休み|休診|休み$)/.test(t) || (t.includes(place.slice(0, 2)) && t.includes("休")));
+  if (off) return { place: "", manual: false, why: `休みの予定「${off}」` };
+  return { place, manual: false, why: "いつもの曜日" };
+}
+// ふだんは「11月分の勤務 藤 8日 麻 14日」の1行だけ。「くわしく」で期間・今日まで・有給も出す(hisho:workOpen に保存)
+let workOpen = !!store.get("hisho:workOpen");
+function leaveRowHtml() {
+  const last = leaveData?.rows.at(-1);
+  const lastText = !last ? "まだ記録がありません" : last.kind === "付与" ? `${ymOf(last.month)} ＋${fmtDays(last.days)}日 付与` : `${ymOf(last.month)} ${last.days ? fmtDays(last.days) + "日 消化" : "消化なし"}`;
+  return `<button class="leavebtn" id="openLeave"><span><b>🌴 ${esc(PROFILE?.leave?.title || "有給")}　残り ${leaveData ? fmtDays(leaveData.left) : "–"}日</b><small>最後の記録:${lastText} ・ 押すと記録・追加</small></span><span class="go">›</span></button>`;
+}
+function renderWorkSum() {
+  const y = calMonth.getFullYear(), m = calMonth.getMonth(), today = ymd(new Date());
+  const sd = (s) => `${+s.slice(5, 7)}/${+s.slice(8)}`;
+  const sums = Object.keys(WORK).map((k) => {
+    const from = ymd(new Date(y, m - 1, WORK[k].close + 1)), to = ymd(new Date(y, m, WORK[k].close));
+    let cnt = 0, done = 0;
+    for (let day = from; day <= to; day = addDays(day, 1)) {
+      if (workOf(day).place !== k) continue;
+      cnt++;
+      if (day <= today) done++;
+    }
+    return { k, from, to, cnt, done, now: from <= today && today <= to };
+  });
+  const toggle = `<button class="link worktoggle" id="workToggle">${workOpen ? "たたむ ▴" : "くわしく ▾"}</button>`;
+  $("workSum").classList.toggle("open", workOpen);
+  $("workSum").innerHTML = workOpen
+    ? `<span>${m + 1}月分の勤務</span>${toggle}` + sums.map(({ k, from, to, cnt, done, now }) =>
+      `<span><span class="wk ${WORK[k].cls}">${WORK[k].short}</span> ${k} <b>${cnt}</b>日 <small>(${sd(from)}〜${sd(to)}${now ? `・今日まで${done}日` : ""})</small></span>`).join("") +
+      leaveRowHtml()
+    : `<span>${m + 1}月分の勤務</span>` + sums.map(({ k, cnt }) => `<span><span class="wk ${WORK[k].cls}">${WORK[k].short}</span> <b>${cnt}</b>日</span>`).join("") + toggle;
+  $("workToggle").onclick = () => { workOpen = !workOpen; store.set("hisho:workOpen", workOpen); renderWorkSum(); };
+  if (workOpen) $("openLeave").onclick = () => showPage("pageLeave");
+}
+// ---- 🌴 有給。月ごとに手で記録して、残りを出す。19日を過ぎて今月分の消化がなければ知らせる ----
+let leaveData = null, lvKind = "消化";
+const fmtDays = (n) => String(Math.round(n * 10) / 10);
+const ymOf = (s) => `${+s.slice(5, 7)}月分`;
+function leaveDueNow() {
+  const t = todayStr();
+  return leaveData && leaveData.rows.length && +t.slice(8, 10) >= 19 && !leaveData.rows.some((r) => r.kind === "消化" && r.month === t.slice(0, 7));
+}
+async function loadLeave(q = {}) {
+  try {
+    leaveData = await post("/api/leave", q);
+    store.set("hisho:leave", leaveData);
+  } catch (e) {
+    leaveData = leaveData || store.get("hisho:leave");
+    $("lvMsg").textContent = e.message;
+  }
+  renderLeave();
+}
+function renderLeave() {
+  if (!leaveData) return;
+  $("lvLeft").textContent = fmtDays(leaveData.left);
+  if (!$("lvMonth").value) $("lvMonth").value = todayStr().slice(0, 7);
+  const rows = [...leaveData.rows].reverse();
+  $("lvList").innerHTML = rows.length ? rows.map((r) => `<div class="lvrow"><span class="m">${r.month.slice(0, 4)}年<br>${ymOf(r.month)}</span>` +
+    `<span class="k ${r.kind === "付与" ? "add" : ""}">${r.kind === "付与" ? `＋${fmtDays(r.days)}日 付与` : r.days ? `${fmtDays(r.days)}日 消化` : "消化なし"}${r.note ? `<small>${esc(r.note)}</small>` : ""}</span>` +
+    `<span class="l">残り${fmtDays(r.left)}日</span><button data-del="${r.id}" aria-label="削除">✕</button></div>`).join("") : `<div class="empty">まだ記録がありません</div>`;
+  if (!$("pageCal").hidden) renderWorkSum();
+  $("mornLeave").innerHTML = leaveDueNow() ? `<button class="leavedue" data-leave>🌴 今月分の有給が、まだ記録されていません(残り${fmtDays(leaveData.left)}日) ›</button>` : "";
+}
+$("lvKind").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-k]");
+  if (!b) return;
+  lvKind = b.dataset.k;
+  for (const x of $("lvKind").children) x.classList.toggle("on", x === b);
+});
+async function addLeave(days, note) {
+  if (!$("lvMonth").value) return ($("lvMsg").textContent = "何月分かを選んでください");
+  $("lvMsg").textContent = "記録中…";
+  await loadLeave({ action: "add", month: $("lvMonth").value, kind: lvKind, days, note });
+  $("lvMsg").textContent = `${ymOf($("lvMonth").value)}を記録しました`;
+  $("lvNote").value = "";
+}
+$("lvSave").onclick = () => addLeave(Number($("lvDays").value || 0), $("lvNote").value.trim());
+$("lvForgot").onclick = () => { lvKind = "消化"; for (const x of $("lvKind").children) x.classList.toggle("on", x.dataset.k === "消化"); addLeave(0, "消化忘れ"); };
+$("lvList").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-del]");
+  if (b && confirm("この記録を削除します。(30日間は⚙設定のゴミ箱から戻せます)")) loadLeave({ action: "delete", id: b.dataset.del });
+});
+document.addEventListener("click", (e) => { if (e.target.closest("[data-leave]")) showPage("pageLeave"); });
+// ---- 🗑 ゴミ箱(⚙設定)。消した項目・有給の記録を30日間残し、1件ずつ戻す ----
+async function loadTrash(q = {}) {
+  try {
+    const { rows } = await post("/api/trash", q);
+    $("trashList").innerHTML = rows.length ? rows.map((r) => `<div class="lvrow"><span class="k">${esc(r.label)}<small>${md(ymd(new Date(r.deleted_at)))}に削除</small></span><button data-restore="${r.id}">戻す</button></div>`).join("") : `<div class="empty">空です</div>`;
+    if (q.action) { leaveData = null; toast("戻しました"); }
+  } catch (e) { $("trashList").innerHTML = `<div class="soon">${esc(e.message)}</div>`; }
+}
+$("trashList").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-restore]");
+  if (b) loadTrash({ action: "restore", id: b.dataset.restore });
+});
+// ---- 📓 秘書ノート。見出しごとに「直す」で書きかえる。直す前の文はサーバーに20版残り、「1つ前に戻す」で呼び出せる ----
+let noteData = null, noteEditing = "";
+async function loadNote(q = {}) {
+  try {
+    noteData = await post("/api/note", q);
+    store.set("hisho:note", noteData);
+    $("noteMsg").textContent = "";
+  } catch (e) {
+    noteData = noteData || store.get("hisho:note");
+    $("noteMsg").textContent = e.message;
+    if (q.action) throw e;
+  }
+  renderNote();
+}
+// 「・」で始まる行は箇条書きにして、折り返しても頭がそろうようにする
+const noteHtml = (body) => body.split("\n").map((l) => (l.startsWith("・") ? `<div class="li">${esc(l)}</div>` : `<div>${esc(l) || "&nbsp;"}</div>`)).join("");
+function renderNote() {
+  if (!noteData) return;
+  $("noteList").innerHTML = noteData.sections.map((n, i) => {
+    const head = `<div class="sec"><span>${i + 1}. ${esc(n.title)}</span>`;
+    if (n.key === noteEditing) return `<div class="card">${head}<small>直しています</small></div>` +
+      `<textarea id="noteText" rows="6">${esc(n.body)}</textarea>` +
+      `<div class="row-btns"><button class="main" data-nsave="${n.key}">保存する</button><button data-ncancel>やめる</button>${n.prev ? `<button data-nprev="${n.key}">1つ前に戻す</button>` : ""}</div></div>`;
+    return `<div class="card">${head}<span><small>${n.updated_at ? md(ymd(new Date(n.updated_at))) + " " : ""}</small><button class="note-edit" data-nedit="${n.key}">直す</button></span></div>` +
+      `<div class="notebody">${n.body ? noteHtml(n.body) : `<span class="muted">まだ書いていません</span>`}</div></div>`;
+  }).join("");
+  const t = $("noteText"); // 直す欄は中身の長さに合わせて伸ばす(中でスクロールさせない)
+  if (t) { grow(t); t.oninput = () => grow(t); }
+}
+$("noteList").addEventListener("click", async (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.nedit) { noteEditing = b.dataset.nedit; renderNote(); $("noteText").focus(); }
+  if (b.dataset.ncancel !== undefined) { noteEditing = ""; renderNote(); }
+  if (b.dataset.nprev) { $("noteText").value = noteData.sections.find((n) => n.key === b.dataset.nprev).prev; grow($("noteText")); } // 保存するまでは書きかわらない
+  if (b.dataset.nsave) {
+    b.disabled = true;
+    try { await loadNote({ action: "save", section: b.dataset.nsave, body: $("noteText").value }); noteEditing = ""; renderNote(); toast("保存しました"); }
+    catch { b.disabled = false; }
+  }
+});
+function renderDayWork(day) {
+  const w = workOf(day), ov = calData.work?.[day];
+  $("dayWorkNote").textContent = `勤務:${w.place || "休み"}(${w.why || "勤務の曜日ではない"})`;
+  const btn = (label, val) => `<button data-wk="${val}" class="${(ov || "") === val ? "on" : ""}">${label}</button>`;
+  $("dayWork").innerHTML = Object.keys(WORK).map((k) => btn(k, k)).join("") + btn("休み", "休み") + btn("自動", "");
+}
+$("dayWork").addEventListener("click", async (e) => {
+  const b = e.target.closest("button[data-wk]");
+  if (!b) return;
+  const place = b.dataset.wk;
+  try {
+    await post("/api/work", { date: dayOpen, place });
+    calData.work = { ...(calData.work || {}) };
+    if (place) calData.work[dayOpen] = place; else delete calData.work[dayOpen];
+    store.set("hisho:cal:" + calRange().start, calData);
+    renderCal(); renderDayWork(dayOpen); toast(place ? `${md(dayOpen)}を「${place}」にしました` : "自動に戻しました");
+  } catch (err) { alert(err.message); }
+});
+
+// 月の表の下の、その月の予定の一覧(ジョルテの「ToDo&メモ」のように)。押すとその日の一覧
+let calListOn = store.get("hisho:calList") ?? true;
+function renderCalList() {
+  $("calListToggle").textContent = calListOn ? "一覧をたたむ ▾" : "一覧を出す ▴";
+  $("calList").hidden = !calListOn;
+  if (!calListOn) return;
+  const y = calMonth.getFullYear(), m = calMonth.getMonth();
+  const first = ymd(new Date(y, m, 1)), last = ymd(new Date(y, m + 1, 0)), today = ymd(new Date());
+  const hol = Object.fromEntries(calData.holidays.map((h) => [h.date, h.title]));
+  let html = "";
+  for (let day = first; day <= last; day = addDays(day, 1)) {
+    const evs = calData.events.filter((e) => e.date <= day && (e.end_date || e.date) >= day).sort((a, b) => (a.start || "").localeCompare(b.start || ""));
+    const tasks = (calData.tasks || []).filter((t) => t.date === day);
+    if (!hol[day] && !evs.length && !tasks.length) continue;
+    const dt = new Date(day + "T00:00:00");
+    const cls = ["cl-date", dt.getDay() === 0 ? "sun" : "", dt.getDay() === 6 ? "sat" : "", hol[day] ? "hol" : ""].join(" ");
+    // 何日も続く予定は初日だけ「〜最終日」を付け、2日目以降は出さない(一覧が長くならないように)
+    const lines = [];
+    if (hol[day]) lines.push(`<div class="h">${esc(hol[day])}</div>`);
+    for (const e of evs) {
+      const multi = e.end_date && e.end_date > e.date;
+      if (multi && e.date !== day && day !== first) continue;
+      const tm = multi ? `〜${md(e.end_date)}` : e.start ? e.start : "";
+      lines.push(`<div class="${e.calName ? "fam" : ""}">${tm ? `<span class="tm">${esc(tm)}</span>` : ""}${esc(e.title)}</div>`);
+    }
+    for (const t of tasks) lines.push(`<div class="task${t.done ? " done" : ""}">${t.done ? "☑" : "☐"} ${esc(t.title)}</div>`);
+    if (!lines.length) continue;
+    html += `<div class="cl-day${day === today ? " today" : ""}${day < today ? " past" : ""}" data-day="${day}"><div class="${cls}">${md(day)}</div><div class="cl-evs">${lines.join("")}</div></div>`;
+  }
+  $("calList").innerHTML = html || `<div class="cl-empty">この月の予定はありません</div>`;
+}
+$("calList").addEventListener("click", (e) => { const r = e.target.closest(".cl-day"); if (r) openDay(r.dataset.day); });
+$("calListToggle").onclick = () => { calListOn = !calListOn; store.set("hisho:calList", calListOn); renderCal(); };
+
+function openDay(day) {
+  dayOpen = day;
+  $("dayTitle").textContent = md(day);
+  renderDayWork(day);
+  const hol = calData.holidays.filter((h) => h.date === day);
+  const evs = calData.events.filter((e) => e.date <= day && (e.end_date || e.date) >= day).sort((a, b) => (a.start || "").localeCompare(b.start || ""));
+  const tasks = (calData.tasks || []).filter((t) => t.date === day);
+  $("dayList").innerHTML = hol.map((h) => `<div class="dayev"><b class="h">${esc(h.title)}</b><small>祝日</small></div>`).join("") +
+    (evs.length ? evs.map((e) => `<div class="dayev" data-id="${esc(e.id)}"><b>${e.repeat ? "🔁 " : ""}${esc(e.title)}</b><small>${esc([timeText(e), e.calName && "📗" + e.calName, e.place && "📍" + e.place, e.note].filter(Boolean).join("・"))}</small></div>`).join("") : `<div class="muted" style="padding:10px 0">予定はありません</div>`) +
+    tasks.map((t) => `<label class="dayev task${t.done ? " done" : ""}" data-task="${esc(t.id)}"><input type="checkbox" ${t.done ? "checked" : ""}><span><b>${esc(t.title)}</b><small>Googleのタスク${t.note ? "・" + esc(t.note) : ""}</small></span></label>`).join("");
+  if (!$("dayDlg").open) $("dayDlg").showModal();
+}
+$("calGrid").addEventListener("click", (e) => { const c = e.target.closest(".d"); if (c) openDay(c.dataset.day); });
+$("dayList").addEventListener("click", (e) => { const r = e.target.closest(".dayev[data-id]"); if (r) openEvent(calData.events.find((x) => x.id === r.dataset.id)); });
+$("dayList").addEventListener("change", async (e) => {
+  const row = e.target.closest(".dayev.task");
+  if (!row) return;
+  const t = (calData.tasks || []).find((x) => x.id === row.dataset.task);
+  try {
+    await post("/api/calendar", { action: "task", id: t.id, listId: t.listId, done: e.target.checked });
+    t.done = e.target.checked; renderCal(); openDay(dayOpen); toast(t.done ? "完了にしました" : "未完了に戻しました");
+  } catch (err) { e.target.checked = !e.target.checked; alert(err.message); }
+});
+$("dayClose").onclick = () => $("dayDlg").close();
+$("dayAdd").onclick = () => openEvent(null, dayOpen);
+$("calAdd").onclick = () => openEvent(null, ymd(new Date()));
+
+// 予定の追加・修正・削除(Googleカレンダーに書き込む)
+let evEditing = null;
+function openEvent(ev, day) {
+  evEditing = ev;
+  $("evTitle").textContent = ev ? "予定を直す" : "予定を追加";
+  $("evName").value = ev?.title || ""; $("evDate").value = ev?.date || day || "";
+  $("evEndDate").value = ev && ev.end_date !== ev.date ? ev.end_date : "";
+  $("evStart").value = ev?.start || ""; $("evEnd").value = ev?.end || ""; $("evPlace").value = ev?.place || ""; $("evNote").value = ev?.note || "";
+  $("evDel").hidden = !ev;
+  // くり返しは新しく足すときだけ選べる。くり返しの予定を直す・消すのはGoogleのアプリで(1回分か全部かを選べるので)
+  $("evRepeat").value = ""; $("evRepeatRow").hidden = !!ev;
+  const rep = !!ev?.repeat;
+  $("evRepeatNote").hidden = !rep; $("evSave").hidden = rep; $("evDel").hidden = !ev || rep;
+  $("evDlg").showModal();
+}
+async function evDo(body, msg) {
+  for (const id of ["evSave", "evDel"]) $(id).disabled = true;
+  try {
+    await post("/api/calendar", body);
+    $("evDlg").close(); toast(msg);
+    for (const k of Object.keys(localStorage)) if (k.startsWith("hisho:cal:")) store.del(k);
+    await loadCal();
+    if ($("dayDlg").open) openDay(dayOpen);
+  } catch (e) { alert(e.message); }
+  finally { for (const id of ["evSave", "evDel"]) $(id).disabled = false; }
+}
+$("evSave").onclick = () => {
+  const event = { title: $("evName").value.trim(), date: $("evDate").value, end_date: $("evEndDate").value, start: $("evStart").value, end: $("evEnd").value, place: $("evPlace").value.trim(), note: $("evNote").value.trim(), repeat: evEditing ? "" : $("evRepeat").value };
+  if (!event.title || !event.date) { alert("予定の名前と日付を入れてください"); return; }
+  if (event.repeat && event.end_date && event.end_date !== event.date) { alert("何日も続く予定は、くり返しにできません"); return; }
+  if (event.end_date && event.end_date < event.date) { alert("最終日が日付より前になっています"); return; }
+  evDo(evEditing ? { action: "update", id: evEditing.id, calId: evEditing.calId, event } : { action: "create", event }, evEditing ? "直しました" : "追加しました");
+};
+$("evCancel").onclick = () => $("evDlg").close();
+$("evDel").onclick = () => { if (confirm(`「${evEditing.title}」を削除します。Googleカレンダーからも消えます。よろしいですか?`)) evDo({ action: "delete", id: evEditing.id, calId: evEditing.calId }, "削除しました"); };
+
+// ---- 🌤 気分(1=⛈ … 5=☀️) ----
+const MOODS = ["⛈", "🌧", "☁️", "🌤", "☀️"];
+const moodButtons = (sel) => MOODS.map((m, i) => `<button data-m="${i + 1}" class="${sel === i + 1 ? "on" : ""}" aria-label="気分${i + 1}">${m}</button>`).join("");
+$("moodNow").innerHTML = moodButtons(0);
+$("moodNow").addEventListener("click", async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  try {
+    await post("/api/mood", { mood: Number(b.dataset.m), date: todayStr() });
+    $("moodNow").innerHTML = moodButtons(Number(b.dataset.m)); toast("気分を記録しました"); loadWeather();
+  } catch (err) { alert(err.message); }
+});
+function renderMoodSave() { $("moodSave").innerHTML = moodButtons(draft.mood || 0); }
+$("moodSave").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b || draft.saved) return;
+  draft.mood = draft.mood === Number(b.dataset.m) ? 0 : Number(b.dataset.m); saveDraft(); renderMoodSave();
+});
+
+// ---- 📊 課題の棚卸し ----
+let stats = null;
+function cmp(now, usual) {
+  if (usual == null || now == null) return "";
+  return now > usual * 1.25 ? "up" : now < usual * 0.8 ? "down" : "";
+}
+function renderStats(st) {
+  const n = st.now, u = st.usual;
+  const cell = (v, title, uv) => `<div><b class="${cmp(v, uv)}">${v ?? "−"}</b>${title}<small>${uv != null ? "いつも " + uv : "&nbsp;"}</small></div>`;
+  $("tgWeek").textContent = `${md(st.today)}現在`;
+  $("tgMeter").innerHTML = cell(n.open, "やること", u.open) + cell(n.dueWeek, "7日以内が期限", u.dueWeek) + cell(n.overdue, "期限切れ", u.overdue) + cell(n.events, "7日間の予定", u.events);
+  const notes = [];
+  if (!u.weeks) notes.push("記録がたまると(数週間)「いつも」と比べられます。");
+  else notes.push(`「いつも」は過去${u.weeks}週の平均。赤はいつもより多い、緑は少ない。`);
+  if (st.calError) notes.push("予定はカレンダーにつながってから数えます。");
+  $("tgNote").textContent = notes.join(" ");
+}
+async function openTriage() {
+  $("triageBox").hidden = false; $("tgResult").innerHTML = ""; $("tgAsk").hidden = false;
+  $("tgMeter").innerHTML = `<div class="muted" style="grid-column:1/-1">数えています…</div>`;
+  $("triageBox").scrollIntoView({ behavior: "smooth", block: "start" });
+  try { stats = await post("/api/stats", { today: todayStr() }); renderStats(stats); renderWeather(stats.weeks); }
+  catch (e) { $("tgMeter").innerHTML = `<div class="muted" style="grid-column:1/-1">${esc(e.message)}</div>`; }
+}
+$("openTriage").onclick = openTriage;
+$("tgClose").onclick = () => { $("triageBox").hidden = true; };
+$("tgRun").onclick = async () => {
+  $("tgRun").disabled = true; $("tgResult").innerHTML = `<div class="muted">仕分けています…(10秒ほど)</div>`;
+  try {
+    const { result: r, yen } = await post("/api/triage", { today: todayStr(), feeling: $("tgFeeling").value });
+    const st = await post("/api/stats", { today: todayStr() }); stats = st; renderStats(st);
+    const name = Object.fromEntries(st.todos.map((t) => [t.id, t]));
+    const list = (idsArr) => idsArr.length ? `<ul>${idsArr.map((id) => name[id] ? `<li>${esc(name[id].title)}${name[id].due ? ` <small>${md(name[id].due)}</small>` : ""}</li>` : "").join("")}</ul>` : `<div class="muted">なし</div>`;
+    $("tgResult").innerHTML =
+      (r.safety ? `<div class="safety">つらさが強いときは、ひとりで抱えずに専門家に相談してください。心療内科・精神科のほか、電話の相談窓口(いのちの電話・よりそいホットライン など)もあります。</div>` : "") +
+      `<div class="verdict">${esc(r.verdict)}</div>` +
+      `<div class="box4"><div class="a"><b>🔴 今日やらないと困る</b>${list(r.must_today)}</div><div class="b"><b>🟡 1週間以内でよい</b>${list(r.this_week)}</div>` +
+      `<div class="c"><b>🟢 待てる・急がない</b>${list(r.can_wait)}</div><div class="d"><b>⚪ 手を離れている</b>${list(r.not_mine)}</div></div>` +
+      (r.thinking ? `<div class="think">💭 ${esc(r.thinking)}</div>` : "") +
+      (r.suggestions.length ? `<div class="lbl">減らす・頼む・延ばす</div><ul>${r.suggestions.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "") +
+      `<div class="muted">約${yen.toFixed(1)}円</div>`;
+    $("tgAsk").hidden = true;
+  } catch (e) { $("tgResult").innerHTML = `<div class="muted">${esc(e.message)}</div>`; }
+  finally { $("tgRun").disabled = false; }
+};
+
+// ---- 🌤 心の天気(週ごとの表) ----
+function renderWeather(weeks) {
+  const rows = weeks.filter((w) => w.recorded || w.moodCount || w.minds || w.current).slice(-8).reverse();
+  const face = (m) => (m == null ? "−" : MOODS[Math.min(4, Math.max(0, Math.round(m) - 1))]);
+  $("weather").innerHTML = rows.length ? `<table class="wx"><tr><th>週</th><th>気分</th><th>心の記録</th><th>やること<br>(未完了/期限)</th><th>予定</th></tr>${rows.map((w) =>
+    `<tr class="${w.current ? "cur" : ""}"><td>${w.current ? "今週" : md(w.week).replace(/\(.\)/, "") + "〜"}</td><td>${face(w.mood)}${w.moodCount ? `<small> ${w.moodCount}回</small>` : ""}</td><td>${w.minds || "−"}</td><td>${w.open != null ? `${w.open}/${w.dueWeek}` : "−"}</td><td>${w.count != null ? w.count : "−"}</td></tr>`).join("")}</table>
+    <div class="muted" style="margin-top:4px">つらかった週に、本当にやることや予定が多かったかを見比べられます。</div>` : `<div class="muted">気分を記録したり話したりすると、ここに週ごとにたまります。</div>`;
+}
+async function loadWeather() { try { renderWeather((await post("/api/stats", { today: todayStr() })).weeks); } catch (e) { $("weather").innerHTML = `<div class="muted">${esc(e.message)}</div>`; } }
+
+// ---- ⚙ 設定 ----
+// 話す画面の「まとめのAI」切り替え(⚙設定と同じ値。この端末に覚える)
+// ふだんはオフ(Opus)。オンにすると Sonnet で約半額
+const AI_NOTE = { opus: "オフ=Opus(精度重視・約4〜5円)", sonnet: "オン:ときどき仕分けが粗くなります" };
+function renderAiPick() {
+  const m = settings.model || "opus";
+  $("aiSave").checked = m === "sonnet";
+  $("aiNote").textContent = AI_NOTE[m];
+}
+$("aiSave").onchange = () => {
+  settings = { ...settings, model: $("aiSave").checked ? "sonnet" : "opus" };
+  store.set("hisho:settings", settings);
+  renderAiPick();
+};
+renderAiPick();
+$("saveSettings").onclick = () => { settings = { pass: $("pass").value, api: $("api").value.trim(), device: $("device").value.trim(), clearMin: Number($("clearMin").value), model: $("aiModel").value }; renderAiPick(); store.set("hisho:settings", settings); toast("保存しました"); loadUsage(); loadProfile(); };
+
+const yenText = (v) => `約${v < 100 ? v.toFixed(1) : Math.round(v).toLocaleString()}円`;
+const dateText = (iso) => { const d = new Date(iso); return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`; };
+const durText = (sec) => { const m = Math.round(sec / 60); return m < 1 ? `${Math.round(sec)}秒` : m < 60 ? `${m}分` : `${Math.floor(m / 60)}時間${m % 60}分`; };
+const n = (v) => (v || 0).toLocaleString();
+function usageRows(t) {
+  return `<div><span>まとめ(Claude)${n(t.claudeCount)}回</span><span>${yenText(t.claudeYen)}</span></div>` +
+    `<div><span>文字起こし(OpenAI)${durText(t.openaiSec)}</span><span>${yenText(t.openaiYen)}</span></div>` +
+    `<div><span>録音</span><span>${n(t.recCount)}回・${durText(t.openaiSec)}・${n(t.recChars)}字</span></div>` +
+    `<div><span>保存</span><span>${n(t.saveCount)}件・${n(t.saveChars)}字</span></div>`;
+}
+// 日ごと・端末ごと(1回ごとの記録から。月を開くと見える)
+let usageStats = null;
+const WD = "日月火水木金土";
+function statRow(t) {
+  const parts = [t.summaries && `まとめ${t.summaries}`, t.recs && `録音${t.recs}`, t.saves && `保存${t.saves}`, t.triages && `棚卸し${t.triages}`].filter(Boolean);
+  return (parts.join("・") || "-") + (t.beforeYen ? "＋記録前の分" : "");
+}
+function monthDetail(k) {
+  if (!usageStats) return "";
+  const devs = usageStats.devices.filter((d) => d.month === k), days = usageStats.days.filter((d) => d.key.startsWith(k));
+  if (!days.length) return "";
+  let h = "";
+  if (devs.length) h += `<h5>端末ごと</h5>` + devs.map((d) => `<div><span>${esc(d.device || "名前なし")} ${statRow(d)}</span><span>${yenText(d.yen)}</span></div>`).join("");
+  h += `<h5>日ごと</h5>` + days.map((d) => {
+    const dt = new Date(d.key + "T00:00:00");
+    return `<div><span>${dt.getMonth() + 1}/${dt.getDate()}(${WD[dt.getDay()]}) ${statRow(d)}</span><span>${yenText(d.yen)}</span></div>`;
+  }).join("");
+  return `<details><summary>端末ごと・日ごと</summary>${h}</details>`;
+}
+function renderUsage(u) {
+  if (!u) { $("usageDetail").textContent = "まだ記録がありません"; $("usageMonths").textContent = ""; return; }
+  const total = u.claudeYen + u.openaiYen;
+  $("usageDetail").innerHTML = usageRows(u) +
+    `<div class="sum"><span>これまでの合計</span><span>${yenText(total)}</span></div>` +
+    `<div class="note">${dateText(u.since)}から(1ドル150円で計算した目安)</div>`;
+  $("usageMonths").innerHTML = Object.keys(u.months || {}).sort().reverse().map((k) => {
+    const t = u.months[k], [y, mo] = k.split("-");
+    return `<div class="month"><div class="head"><span>${y}年${Number(mo)}月</span><span>${yenText(t.claudeYen + t.openaiYen)}</span></div>${usageRows(t)}${monthDetail(k)}</div>`;
+  }).join("");
+}
+async function loadUsage() { try { const d = await post("/api/usage", {}); usageStats = d.stats || null; renderUsage(d.usage); } catch { $("usageDetail").textContent = "読み込めませんでした(合言葉を確認)"; } }
+
+// CSVの書き出し。iPhoneは共有シート(ファイルに保存・AirDrop・メール)、Macはダウンロード
+$("exportCsv").onclick = async () => {
+  let csv;
+  try { csv = (await post("/api/usage", { action: "csv" })).csv; } catch (e) { toast("書き出せませんでした:" + e.message); return; }
+  const d = new Date(), name = `秘書アプリ_使った記録_${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}.csv`;
+  const file = new File([csv], name, { type: "text/csv" });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); } catch { /* 閉じただけ */ }
+    return;
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+
+// 個人の設定を入れる。控えがあれば先に使い、サーバーから読めたら(変わっていれば)入れ直して今の画面を描き直す
+function applyProfile(p) {
+  PROFILE = p;
+  CATEGORIES = p?.categories || [];
+  ICON = p?.icons || {};
+  WORK = p?.work || {};
+  VIEWS.find((v) => v[0] === "record")[2] = p?.records || [];
+  fillCatSelect();
+  $("lvTitle").textContent = p?.leave?.title || "有給";
+  $("lvHint").textContent = p?.leave?.hint || "";
+  $("lvNote").placeholder = p?.leave?.example || "";
+}
+async function loadProfile() {
+  try {
+    const p = await post("/api/profile", {});
+    if (JSON.stringify(p) === JSON.stringify(PROFILE)) return;
+    store.set("hisho:profile", p);
+    applyProfile(p);
+    if (curPage === "pageHome") loadHome();
+    if (curPage === "pageCal") loadCal();
+    if (curPage === "pageList") loadList();
+  } catch { /* 合言葉がまだ・通信なし。控えのまま */ }
+}
+applyProfile(store.get("hisho:profile"));
+loadProfile();
+autoClear();
+render();
+</script>
+</body>
+</html>
