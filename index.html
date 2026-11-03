@@ -281,7 +281,7 @@
         <input type="file" id="fileIn" accept=".m4a,.mp3,.wav,.aac" hidden>
         <div id="recStatus" class="hint"></div>
       </div>
-      <textarea id="input" placeholder="予定・やること・思いついたことなど、自由に話してください。&#10;例:「明日は洗車をする。来週の水曜14時から税理士さんと打ち合わせ…」&#10;キーボードの🎤でも話せます。"></textarea>
+      <textarea id="input" placeholder="予定・ToDo・思いついたことなど、自由に話してください。&#10;例:「明日は洗車をする。来週の水曜14時から税理士さんと打ち合わせ…」&#10;キーボードの🎤でも話せます。"></textarea>
       <div class="hint"><span>聞き間違いや「えー」はそのままでOK。患者さんの情報は話さないでください。</span><span id="count">0字</span></div>
       <div class="row-btns">
         <button class="main" id="run">まとめて仕分ける</button>
@@ -377,7 +377,7 @@
       <div class="sec"><span>今の気分は?</span><small>押すと記録します</small></div>
       <div class="moods" id="moodNow"></div>
     </div>
-    <button class="tired" id="openTriage">😣 いっぱいいっぱい…<small>やることの量を、いつもと比べて確かめる</small></button>
+    <button class="tired" id="openTriage">😣 いっぱいいっぱい…<small>ToDoの量を、いつもと比べて確かめる</small></button>
     <div class="card" id="triageBox" hidden>
       <div class="sec"><span>📊 課題の棚卸し</span><small id="tgWeek"></small></div>
       <div class="meter" id="tgMeter"></div>
@@ -414,7 +414,7 @@
     <div id="memoList"></div>
   </div>
 
-  <!-- 📋 一覧(ホームの「すべて」から。分野ごと。やることは期限ごと) -->
+  <!-- 📋 一覧(ホームの「すべて」から。分野ごと。ToDoは期限ごと) -->
   <div id="pageList" hidden>
     <header><button class="link back" data-back="pageHome">‹ ホーム</button><button id="addItem">＋ 追加</button></header>
     <div class="chips" id="chips"></div>
@@ -507,7 +507,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "87904ed7959a87f2ab5d2b7f4318a532adab91ff";
+const BUILD = "5b8f34b95e6e5f398c76a8be11353c9551aaba42";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length) return;
   try {
@@ -1099,12 +1099,12 @@ for (const id of ["title", "tags", "summary", "body"]) {
 
 // ---- 📋 まとめ ----
 const VIEWS = [
-  ["todo", "✅ やること", ["やること"]], ["idea", "💡 アイデア", ["アイデア"]], ["goal", "🎯 目標", ["目標・人生設計"]],
+  ["todo", "✅ ToDo", ["ToDo"]], ["idea", "💡 アイデア", ["アイデア"]], ["goal", "🎯 目標", ["目標・人生設計"]],
   ["people", "🤝 人・約束", ["人・約束"]], ["learn", "📚 学び", ["学び"]], ["shop", "🛒 買い物", ["買い物・欲しいもの"]],
   ["record", "📖 記録", []], // 分野は個人の設定から(applyProfile)
 ];
 // チェックで完了にできる分野
-const CHECKABLE = ["やること", "人・約束", "学び", "買い物・欲しいもの"];
+const CHECKABLE = ["ToDo", "人・約束", "学び", "買い物・欲しいもの"];
 let view = store.get("hisho:view") || "todo", listItemsCache = [];
 if (!VIEWS.some((v) => v[0] === view)) view = "todo";
 $("chips").innerHTML = VIEWS.map(([k, label]) => `<button data-v="${k}">${label}</button>`).join("");
@@ -1190,7 +1190,7 @@ function openItem(it) {
   itEditing = it;
   const v = VIEWS.find((x) => x[0] === view);
   $("itemDlgTitle").textContent = it ? "項目を直す" : "項目を追加";
-  $("itName").value = it?.title || ""; $("itCat").value = it?.category || (v?.[2]?.[0] ?? "やること");
+  $("itName").value = it?.title || ""; $("itCat").value = it?.category || (v?.[2]?.[0] ?? "ToDo");
   $("itDue").value = it?.due || ""; $("itPerson").value = it?.person || ""; $("itDetail").value = it?.detail || "";
   $("itDel").hidden = !it;
   $("itemDlg").showModal();
@@ -1201,8 +1201,9 @@ $("itSave").onclick = async () => {
   const item = { title: $("itName").value.trim(), category: $("itCat").value, due: $("itDue").value, person: $("itPerson").value.trim(), detail: $("itDetail").value.trim() };
   if (!item.title) { alert("項目を入れてください"); return; }
   try {
-    await post("/api/item", itEditing ? { action: "update", id: itEditing.id, item } : { action: "add", item });
+    const r = await post("/api/item", itEditing ? { action: "update", id: itEditing.id, item } : { action: "add", item });
     $("itemDlg").close(); toast(itEditing ? "直しました" : "追加しました"); refreshCurrent();
+    if (r.warn) alert(r.warn); // Googleのタスクに入らなかったとき
   } catch (e) { alert(e.message); }
 };
 $("itDel").onclick = async () => {
@@ -1442,7 +1443,7 @@ function renderCal() {
       const lines = [];
       if (hol[day]) lines.push(`<div class="h">${esc(hol[day])}</div>`);
       for (const e of single.filter((e) => e.date === day)) lines.push(`<div class="e${e.calName ? " fam" : ""}">${esc(e.title)}</div>`);
-      for (const t of (calData.tasks || []).filter((t) => t.date === day)) lines.push(`<div class="e task${t.done ? " done" : ""}">${t.done ? "☑" : "☐"}${esc(t.title)}</div>`);
+      for (const t of dayTasks(day)) lines.push(`<div class="e task${t.todo ? " todo" : ""}${t.done ? " done" : ""}">${t.done ? "☑" : "☐"}${esc(t.title)}</div>`);
       const shown = lines.length <= room ? lines : room <= 1 ? lines.slice(0, 1) : lines.slice(0, room - 1).concat(`<div class="more">ほか${lines.length - room + 1}件</div>`);
       const wk = dt.getMonth() === month ? workOf(day) : { place: "" }; // ほかの月の日には出さない
       cells += `<div class="${cls}" data-day="${day}"><div class="n">${dt.getDate()}${wk.place ? `<span class="wk ${WORK[wk.place].cls}${wk.manual ? " man" : ""}">${WORK[wk.place].short}</span>` : ""}</div><div style="height:${lanes.length * 16}px"></div>${shown.join("")}</div>`;
@@ -1465,8 +1466,18 @@ async function loadCal() {
   $("calStatus").textContent = cached ? "" : "読み込み中…"; // 控え(前回の表示)があるときは出さない(目障りなだけなので)
   if (!leaveData) loadLeave();
   try {
-    const [data, work] = await Promise.all([post("/api/calendar", { action: "list", start: from, end }), post("/api/work", { start: from, end }).catch(() => ({ overrides: {} }))]);
+    const [data, work, todo] = await Promise.all([post("/api/calendar", { action: "list", start: from, end }), post("/api/work", { start: from, end }).catch(() => ({ overrides: {} })),
+      post("/api/items", { categories: ["ToDo"] }).catch(() => ({ items: calData.todos || [] }))]);
     data.work = work.overrides || {};
+    // ToDo と Googleのタスクは同じもの。Googleに入れたToDo(gcal_id「task:リスト:タスク」)は、Googleのタスクの方を出さない(二重にしない)。
+    // Googleの側で完了にした・戻したときは、ToDoもそろえる
+    data.todos = (todo.items || []).filter((i) => i.due && i.due >= from && i.due <= end).map((i) => ({ id: i.id, title: i.title, date: i.due, done: i.status === "完了", gtask: /^task:[^:]+:(.+)$/.exec(i.gcal_id || "")?.[1] }));
+    const linked = new Set(data.todos.map((t) => t.gtask).filter(Boolean));
+    for (const t of data.todos) {
+      const g = (data.tasks || []).find((x) => x.id === t.gtask);
+      if (g && g.done !== t.done) { t.done = g.done; post("/api/item", { action: "update", id: t.id, item: { status: g.done ? "完了" : "未着手" } }).catch(() => {}); }
+    }
+    data.tasks = (data.tasks || []).filter((x) => !linked.has(x.id));
     if (calRange().start !== start) return; // 読み込み中に月を変えた
     calData = data; calLoaded = start; store.set(key, data);
     renderCal();
@@ -1677,7 +1688,7 @@ function renderCalList() {
   let html = "";
   for (let day = first; day <= last; day = addDays(day, 1)) {
     const evs = calData.events.filter((e) => e.date <= day && (e.end_date || e.date) >= day).sort((a, b) => (a.start || "").localeCompare(b.start || ""));
-    const tasks = (calData.tasks || []).filter((t) => t.date === day);
+    const tasks = dayTasks(day);
     if (!hol[day] && !evs.length && !tasks.length) continue;
     const dt = new Date(day + "T00:00:00");
     const cls = ["cl-date", dt.getDay() === 0 ? "sun" : "", dt.getDay() === 6 ? "sat" : "", hol[day] ? "hol" : ""].join(" ");
@@ -1690,7 +1701,7 @@ function renderCalList() {
       const tm = multi ? `〜${md(e.end_date)}` : e.start ? e.start : "";
       lines.push(`<div class="${e.calName ? "fam" : ""}">${tm ? `<span class="tm">${esc(tm)}</span>` : ""}${esc(e.title)}</div>`);
     }
-    for (const t of tasks) lines.push(`<div class="task${t.done ? " done" : ""}">${t.done ? "☑" : "☐"} ${esc(t.title)}</div>`);
+    for (const t of tasks) lines.push(`<div class="task${t.todo ? " todo" : ""}${t.done ? " done" : ""}">${t.done ? "☑" : "☐"} ${esc(t.title)}</div>`);
     if (!lines.length) continue;
     html += `<div class="cl-day${day === today ? " today" : ""}${day < today ? " past" : ""}" data-day="${day}"><div class="${cls}">${md(day)}</div><div class="cl-evs">${lines.join("")}</div></div>`;
   }
@@ -1699,16 +1710,18 @@ function renderCalList() {
 $("calList").addEventListener("click", (e) => { const r = e.target.closest(".cl-day"); if (r) openDay(r.dataset.day); });
 $("calListToggle").onclick = () => { calListOn = !calListOn; store.set("hisho:calList", calListOn); renderCal(); };
 
+// その日の「チェックで消すもの」:Googleのタスクと、期限がその日のアプリのToDo(todo: true)
+const dayTasks = (day) => [...(calData.tasks || []).filter((t) => t.date === day), ...(calData.todos || []).filter((t) => t.date === day).map((t) => ({ ...t, todo: true }))];
 function openDay(day) {
   dayOpen = day;
   $("dayTitle").textContent = md(day);
   renderDayWork(day);
   const hol = calData.holidays.filter((h) => h.date === day);
   const evs = calData.events.filter((e) => e.date <= day && (e.end_date || e.date) >= day).sort((a, b) => (a.start || "").localeCompare(b.start || ""));
-  const tasks = (calData.tasks || []).filter((t) => t.date === day);
+  const tasks = dayTasks(day);
   $("dayList").innerHTML = hol.map((h) => `<div class="dayev"><b class="h">${esc(h.title)}</b><small>祝日</small></div>`).join("") +
-    (evs.length ? evs.map((e) => `<div class="dayev" data-id="${esc(e.id)}"><b>${e.repeat ? "🔁 " : ""}${esc(e.title)}</b><small>${esc([timeText(e), e.calName && "📗" + e.calName, e.place && "📍" + e.place, e.note].filter(Boolean).join("・"))}</small></div>`).join("") : `<div class="muted" style="padding:10px 0">予定はありません</div>`) +
-    tasks.map((t) => `<label class="dayev task${t.done ? " done" : ""}" data-task="${esc(t.id)}"><input type="checkbox" ${t.done ? "checked" : ""}><span><b>${esc(t.title)}</b><small>Googleのタスク${t.note ? "・" + esc(t.note) : ""}</small></span></label>`).join("");
+    (evs.length ? evs.map((e) => `<div class="dayev" data-id="${esc(e.id)}"><b>${e.repeat ? "🔁 " : ""}${esc(e.title)}</b><small>${esc([timeText(e), e.calName && "📗" + e.calName, e.place && "📍" + e.place, e.note].filter(Boolean).join("・"))}</small></div>`).join("") : hol.length || tasks.length ? "" : `<div class="muted" style="padding:10px 0">予定はありません</div>`) +
+    tasks.map((t) => `<label class="dayev task${t.todo ? " todo" : ""}${t.done ? " done" : ""}" data-task="${esc(t.id)}"${t.todo ? " data-todo" : ""}><input type="checkbox" ${t.done ? "checked" : ""}><span><b>${esc(t.title)}</b><small>${t.todo ? (t.gtask ? "ToDo(Googleのタスクにも入っています)" : "ToDo") : "Googleのタスク" + (t.note ? "・" + esc(t.note) : "")}</small></span></label>`).join("");
   if (!$("dayDlg").open) $("dayDlg").showModal();
 }
 $("calGrid").addEventListener("click", (e) => { const c = e.target.closest(".d"); if (c) openDay(c.dataset.day); });
@@ -1716,9 +1729,11 @@ $("dayList").addEventListener("click", (e) => { const r = e.target.closest(".day
 $("dayList").addEventListener("change", async (e) => {
   const row = e.target.closest(".dayev.task");
   if (!row) return;
-  const t = (calData.tasks || []).find((x) => x.id === row.dataset.task);
+  const todo = row.hasAttribute("data-todo");
+  const t = (todo ? calData.todos : calData.tasks || []).find((x) => String(x.id) === row.dataset.task);
   try {
-    await post("/api/calendar", { action: "task", id: t.id, listId: t.listId, done: e.target.checked });
+    if (todo) await post("/api/item", { action: "update", id: t.id, item: { status: e.target.checked ? "完了" : "未着手" } });
+    else await post("/api/calendar", { action: "task", id: t.id, listId: t.listId, done: e.target.checked });
     t.done = e.target.checked; renderCal(); openDay(dayOpen); toast(t.done ? "完了にしました" : "未完了に戻しました");
   } catch (err) { e.target.checked = !e.target.checked; alert(err.message); }
 });
@@ -1789,7 +1804,7 @@ function renderStats(st) {
   const n = st.now, u = st.usual;
   const cell = (v, title, uv) => `<div><b class="${cmp(v, uv)}">${v ?? "−"}</b>${title}<small>${uv != null ? "いつも " + uv : "&nbsp;"}</small></div>`;
   $("tgWeek").textContent = `${md(st.today)}現在`;
-  $("tgMeter").innerHTML = cell(n.open, "やること", u.open) + cell(n.dueWeek, "7日以内が期限", u.dueWeek) + cell(n.overdue, "期限切れ", u.overdue) + cell(n.events, "7日間の予定", u.events);
+  $("tgMeter").innerHTML = cell(n.open, "ToDo", u.open) + cell(n.dueWeek, "7日以内が期限", u.dueWeek) + cell(n.overdue, "期限切れ", u.overdue) + cell(n.events, "7日間の予定", u.events);
   const notes = [];
   if (!u.weeks) notes.push("記録がたまると(数週間)「いつも」と比べられます。");
   else notes.push(`「いつも」は過去${u.weeks}週の平均。赤はいつもより多い、緑は少ない。`);
@@ -1829,9 +1844,9 @@ $("tgRun").onclick = async () => {
 function renderWeather(weeks) {
   const rows = weeks.filter((w) => w.recorded || w.moodCount || w.minds || w.current).slice(-8).reverse();
   const face = (m) => (m == null ? "−" : MOODS[Math.min(4, Math.max(0, Math.round(m) - 1))]);
-  $("weather").innerHTML = rows.length ? `<table class="wx"><tr><th>週</th><th>気分</th><th>心の記録</th><th>やること<br>(未完了/期限)</th><th>予定</th></tr>${rows.map((w) =>
+  $("weather").innerHTML = rows.length ? `<table class="wx"><tr><th>週</th><th>気分</th><th>心の記録</th><th>ToDo<br>(未完了/期限)</th><th>予定</th></tr>${rows.map((w) =>
     `<tr class="${w.current ? "cur" : ""}"><td>${w.current ? "今週" : md(w.week).replace(/\(.\)/, "") + "〜"}</td><td>${face(w.mood)}${w.moodCount ? `<small> ${w.moodCount}回</small>` : ""}</td><td>${w.minds || "−"}</td><td>${w.open != null ? `${w.open}/${w.dueWeek}` : "−"}</td><td>${w.count != null ? w.count : "−"}</td></tr>`).join("")}</table>
-    <div class="muted" style="margin-top:4px">つらかった週に、本当にやることや予定が多かったかを見比べられます。</div>` : `<div class="muted">気分を記録したり話したりすると、ここに週ごとにたまります。</div>`;
+    <div class="muted" style="margin-top:4px">つらかった週に、本当にToDoや予定が多かったかを見比べられます。</div>` : `<div class="muted">気分を記録したり話したりすると、ここに週ごとにたまります。</div>`;
 }
 async function loadWeather() { try { renderWeather((await post("/api/stats", { today: todayStr() })).weeks); } catch (e) { $("weather").innerHTML = `<div class="muted">${esc(e.message)}</div>`; } }
 
