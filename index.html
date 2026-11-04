@@ -99,6 +99,9 @@
   .star.on { color:#f0b429; }
   .back { font-size:17px; color:var(--acc); padding:6px 0; }
   .mgroup { font-size:13px; color:var(--sub); font-weight:700; margin:12px 2px 4px; }
+  .wg.fam { border:2px solid #e86a92; background:#fff5f8; }
+  .lnrow select { width:auto; flex:none; min-height:30px; font-size:14px; margin:0; }
+  @media (prefers-color-scheme: dark) { .wg.fam { background:#33232a; } }
   @media (prefers-color-scheme: dark) { .wg.now { background:#2e2a1c; } .goalrow span { background:#2a3239; } }
   /* 📋 まとめ */
   .chips { display:flex; gap:6px; overflow-x:auto; padding:2px 0 8px; margin:0 -16px; padding-left:16px; padding-right:16px; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
@@ -458,6 +461,11 @@
       <p class="muted">話した内容は記録しません(字数・長さ・金額だけ)。</p>
     </div>
     <div class="usage-box">
+      <b>💬 LINE(依頼の受け取り)</b>
+      <div id="lineUsers"></div>
+      <p class="muted">秘書のLINEを友だち追加して1通送った人がここに出ます。「妻」の文は依頼として記録し、「自分」には新しい依頼と毎日18時の「帰りに」を知らせます。</p>
+    </div>
+    <div class="usage-box">
       <b>🗑 ゴミ箱(消したものを30日間残します)</b>
       <div id="trashList"></div>
       <p class="muted">データ全体は毎晩Macに書き出し、iCloud Driveにも保管しています。</p>
@@ -518,7 +526,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "308af13691f89b7b7d569921123f11fff24b3a8a";
+const BUILD = "259de95868a65ab356272f305fda81a8fcba42ee";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length) return;
   try {
@@ -587,7 +595,7 @@ function showPage(page, fromPop = false) {
   if (page === "pageNote") loadNote();
   if (page === "pageMemo") loadMemos();
   if (page === "pageMorning") { loadReport(); loadWeather(); loadLeave(); }
-  if (page === "pageSet") { $("pass").value = settings.pass || ""; $("api").value = settings.api || ""; $("device").value = settings.device || ""; $("clearMin").value = String(settings.clearMin ?? 60); $("aiModel").value = settings.model || "opus"; loadUsage(); loadTrash(); }
+  if (page === "pageSet") { $("pass").value = settings.pass || ""; $("api").value = settings.api || ""; $("device").value = settings.device || ""; $("clearMin").value = String(settings.clearMin ?? 60); $("aiModel").value = settings.model || "opus"; loadUsage(); loadTrash(); loadLineUsers(); }
   if (page === "pageSpeak") requestAnimationFrame(growAll);
 }
 for (const b of document.querySelectorAll("nav.tabs button")) b.onclick = () => showPage(b.dataset.page);
@@ -1117,8 +1125,8 @@ const VIEWS = [
 // チェックで完了にできる分野
 const CHECKABLE = ["ToDo", "人・約束", "学び", "買い物・欲しいもの"];
 let view = store.get("hisho:view") || "todo", listItemsCache = [];
-if (!VIEWS.some((v) => v[0] === view)) view = "todo";
-$("chips").innerHTML = VIEWS.map(([k, label]) => `<button data-v="${k}">${label}</button>`).join("");
+const renderChips = () => ($("chips").innerHTML = VIEWS.map(([k, label]) => `<button data-v="${k}">${label}</button>`).join(""));
+renderChips();
 $("chips").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { view = b.dataset.v; store.set("hisho:view", view); loadList(); } });
 $("showDone").onchange = loadList;
 const fillCatSelect = () => ($("itCat").innerHTML = CATEGORIES.map((c) => `<option>${c}</option>`).join(""));
@@ -1335,7 +1343,8 @@ async function loadHome() {
   if (!$("home").children.length) $("home").innerHTML = `<div class="muted">読み込み中…</div>`;
   try {
     const h = await post("/api/home", { today: todayStr() });
-    homeCache = [...h.focus, ...h.todos, ...h.ideas.latest, ...h.shop.latest];
+    const fam = PROFILE?.family, famRows = fam ? h.family || [] : [];
+    homeCache = [...famRows, ...h.focus, ...h.todos, ...h.ideas.latest, ...h.shop.latest];
     const t = todayStr(), tm = addDays(t, 1), we = addDays(t, 6);
     const notFocus = h.todos.filter((i) => !i.focused);
     const byDue = (a, b) => (a.due || "9").localeCompare(b.due || "9") || b.id - a.id;
@@ -1347,6 +1356,7 @@ async function loadHome() {
     const rows = (list) => list.map((i) => rowHtml(i, "todo")).join("");
     const goalTag = (k) => (k.startsWith("長期") ? "3年" : k.startsWith("中期") ? "1年" : k.startsWith("短期") ? "今月" : "大切");
     $("home").innerHTML =
+      (famRows.length ? `<div class="wg fam"><div class="wgt"><span>${fam.icon} ${esc(fam.title)} ${famRows.length}</span><button data-open="family">すべて ›</button></div>${famRows.map((i) => rowHtml(i, "family")).join("")}</div>` : "") +
       (h.leave?.due ? `<button class="leavedue" data-leave>🌴 今月分の有給が、まだ記録されていません(残り${fmtDays(h.leave.left)}日) ›</button>` : "") +
       `<div class="wg now"><div class="wgt"><span>⭐ 今やること</span><button data-open="todo">選ぶ ›</button></div>` +
       (h.focus.length ? rows(h.focus) : `<div class="empty">ToDoの☆を押すと、ここに入ります(3つまで)</div>`) + `</div>` +
@@ -1666,6 +1676,20 @@ async function loadTrash(q = {}) {
     if (q.action) { leaveData = null; toast("戻しました"); }
   } catch (e) { $("trashList").innerHTML = `<div class="soon">${esc(e.message)}</div>`; }
 }
+// LINEの友だちと役割(妻/自分/使わない)。妻にすると、それまでに届いていた文も依頼に入る
+async function loadLineUsers(q = {}) {
+  try {
+    const r = await post("/api/lineusers", q);
+    $("lineUsers").innerHTML = r.users.length ? r.users.map((u) => `<div class="lvrow lnrow"><span class="k">${esc(u.name)}<small>${u.last_at ? md(ymd(new Date(u.last_at))) + "に受信" : ""}${u.pending ? `・未設定のあいだの文 ${u.pending}件` : ""}</small></span>
+      <select data-line="${esc(u.id)}">${[["", "未設定"], ...Object.entries(r.roles).filter(([k]) => k !== "none")].map(([k, v]) => `<option value="${k}"${u.role === k ? " selected" : ""}>${v}</option>`).join("")}</select></div>`).join("")
+      : `<div class="empty">まだいません</div>`;
+    if (r.added) toast(`届いていた${r.added}件を依頼に入れました`);
+  } catch (e) { $("lineUsers").innerHTML = `<div class="soon">${esc(e.message)}</div>`; }
+}
+$("lineUsers").addEventListener("change", (e) => {
+  const sel = e.target.closest("select[data-line]");
+  if (sel) loadLineUsers({ action: "role", id: sel.dataset.line, role: sel.value || "none" });
+});
 $("trashList").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-restore]");
   if (b) loadTrash({ action: "restore", id: b.dataset.restore });
@@ -2016,6 +2040,12 @@ function applyProfile(p) {
   ICON = p?.icons || {};
   WORK = p?.work || {};
   VIEWS.find((v) => v[0] === "record")[2] = p?.records || [];
+  // 家族からの依頼(LINEで届く)。設定にあるときだけ、一覧のチップとチェックを足す
+  const fam = p?.family, fv = VIEWS.findIndex((v) => v[0] === "family");
+  if (fv >= 0) VIEWS.splice(fv, 1);
+  if (fam) { VIEWS.splice(1, 0, ["family", `${fam.icon} ${fam.title}`, [fam.category]]); if (!CHECKABLE.includes(fam.category)) CHECKABLE.push(fam.category); }
+  renderChips();
+  if (!VIEWS.some((v) => v[0] === view)) view = "todo";
   fillCatSelect();
   $("lvTitle").textContent = p?.leave?.title || "有給";
   $("lvHint").textContent = p?.leave?.hint || "";
