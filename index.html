@@ -195,6 +195,7 @@
   .cl-day { display:flex; gap:10px; padding:7px 12px; border-bottom:1px solid var(--line); background:var(--card); cursor:pointer; }
   .cl-day.today { box-shadow:inset 3px 0 0 var(--acc); }
   .cl-day.past { opacity:.55; }
+  .cl-past { display:block; width:100%; text-align:left; background:var(--bg); color:var(--sub); border:none; border-bottom:1px solid var(--line); border-radius:0; font-size:14px; min-height:36px; padding:6px 12px; }
   .cl-date { flex:none; width:58px; font-size:13px; color:var(--sub); padding-top:1px; }
   .cl-date.sun, .cl-date.hol { color:#d33; } .cl-date.sat { color:#2a5db0; }
   .cl-evs { flex:1; min-width:0; font-size:15px; line-height:1.45; }
@@ -517,7 +518,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "ed9e8591ac1038325bdd04c7dbceb33e4175e4a4";
+const BUILD = "308af13691f89b7b7d569921123f11fff24b3a8a";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length) return;
   try {
@@ -1731,6 +1732,7 @@ $("dayWork").addEventListener("click", async (e) => {
 
 // 月の表の下の、その月の予定の一覧(ジョルテの「ToDo&メモ」のように)。押すとその日の一覧
 let calListOn = store.get("hisho:calList") ?? true;
+let calPastOpen = false;
 function renderCalList() {
   $("calListToggle").textContent = calListOn ? "一覧をたたむ ▾" : "一覧を出す ▴";
   $("calList").hidden = !calListOn;
@@ -1738,7 +1740,9 @@ function renderCalList() {
   const y = calMonth.getFullYear(), m = calMonth.getMonth();
   const first = ymd(new Date(y, m, 1)), last = ymd(new Date(y, m + 1, 0)), today = ymd(new Date());
   const hol = Object.fromEntries(calData.holidays.map((h) => [h.date, h.title]));
-  let html = "";
+  // 今月は今日から下だけ出し、過去の日は先頭の「過去の予定」を押したときだけ出す
+  const hidePast = first <= today && today <= last;
+  let html = "", past = "", pastN = 0;
   for (let day = first; day <= last; day = addDays(day, 1)) {
     const evs = calData.events.filter((e) => e.date <= day && (e.end_date || e.date) >= day).sort((a, b) => (a.start || "").localeCompare(b.start || ""));
     const tasks = dayTasks(day);
@@ -1756,11 +1760,16 @@ function renderCalList() {
     }
     for (const t of tasks) lines.push(`<div class="task${t.todo ? " todo" : ""}${t.done ? " done" : ""}">${t.done ? "☑" : "☐"} ${esc(t.title)}</div>`);
     if (!lines.length) continue;
-    html += `<div class="cl-day${day === today ? " today" : ""}${day < today ? " past" : ""}" data-day="${day}"><div class="${cls}">${md(day)}</div><div class="cl-evs">${lines.join("")}</div></div>`;
+    const row = `<div class="cl-day${day === today ? " today" : ""}${day < today ? " past" : ""}" data-day="${day}"><div class="${cls}">${md(day)}</div><div class="cl-evs">${lines.join("")}</div></div>`;
+    if (hidePast && day < today) { past += row; pastN++; } else html += row;
   }
+  if (pastN) html = `<button class="cl-past" id="calPastToggle">${calPastOpen ? "▾ 過去の予定をしまう" : `▸ 過去の予定(${pastN}日分)`}</button>${calPastOpen ? past : ""}` + (html || `<div class="cl-empty">今日から月末までの予定はありません</div>`);
   $("calList").innerHTML = html || `<div class="cl-empty">この月の予定はありません</div>`;
 }
-$("calList").addEventListener("click", (e) => { const r = e.target.closest(".cl-day"); if (r) openDay(r.dataset.day); });
+$("calList").addEventListener("click", (e) => {
+  if (e.target.closest("#calPastToggle")) { calPastOpen = !calPastOpen; renderCalList(); return; }
+  const r = e.target.closest(".cl-day"); if (r) openDay(r.dataset.day);
+});
 $("calListToggle").onclick = () => { calListOn = !calListOn; store.set("hisho:calList", calListOn); renderCal(); };
 
 // その日の「チェックで消すもの」:Googleのタスクと、期限がその日のアプリのToDo(todo: true)
