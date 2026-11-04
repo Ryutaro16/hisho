@@ -131,6 +131,10 @@
   .calhead h1 { font-size:22px; min-width:6.4em; } /* 1月と12月で幅が変わって › がずれないように */
   .calhead button { min-height:36px; padding:4px 12px; }
   #dayDlg .row-btns button { white-space:nowrap; }
+  .listen { margin:2px 0 8px; }
+  .listen button { width:100%; padding:10px; font-size:16px; }
+  .listen audio { width:100%; }
+  .listen .muted { margin-top:4px; }
   .evkind { display:flex; gap:0; margin:4px 0 6px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
   .evkind button { flex:1; border:0; border-radius:0; padding:8px 0; font-size:15px; background:transparent; color:var(--sub); }
   .evkind button.on { background:var(--acc); color:#fff; font-weight:600; }
@@ -396,6 +400,7 @@
     </div>
     <div class="card">
       <div class="sec"><span>☀️ 朝のレポート</span><select id="repDate" style="width:auto;padding:4px 6px;font-size:14px" aria-label="日付"></select></div>
+      <div class="listen"><button id="listenBtn">🔊 聞く(読み上げ)</button><audio id="listenAudio" controls hidden></audio><div class="muted" id="listenNote" hidden></div></div>
       <div id="report" class="report"></div>
     </div>
     <div class="card">
@@ -512,7 +517,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "d0c5ac128b40284eb7f96bc974a5cb3710bda93b";
+const BUILD = "ed9e8591ac1038325bdd04c7dbceb33e4175e4a4";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length) return;
   try {
@@ -1396,6 +1401,7 @@ function mdToHtml(text) {
   return out.join("");
 }
 async function loadReport(date) {
+  resetListen();
   $("report").innerHTML = `<div class="muted">読み込み中…</div>`;
   try {
     const { dates, report } = await post("/api/reports", { date });
@@ -1405,6 +1411,32 @@ async function loadReport(date) {
   } catch (e) { $("report").innerHTML = `<div class="muted">${esc(e.message)}</div>`; }
 }
 $("repDate").onchange = () => loadReport($("repDate").value);
+
+// 🔊 朝のレポートの読み上げ。Macの定期タスクが作った音声ファイルを、押したときに読み込む(開くたびに通信量を使わないように)。
+// 音声ファイルとして再生するので、画面を消しても止まらず、車のBluetoothの再生・一時停止も使える
+let listenUrl = "";
+function resetListen() {
+  const a = $("listenAudio"); a.pause(); a.hidden = true; a.removeAttribute("src");
+  if (listenUrl) URL.revokeObjectURL(listenUrl);
+  listenUrl = ""; $("listenBtn").hidden = false; $("listenNote").hidden = true;
+}
+$("listenBtn").onclick = async () => {
+  const date = $("repDate").value;
+  if (!date) return;
+  $("listenBtn").disabled = true; $("listenBtn").textContent = "読み込み中…";
+  try {
+    const res = await fetch((settings.api || DEFAULT_API).replace(/\/$/, "") + "/api/audio?date=" + date, {
+      method: "POST", headers: { "Content-Type": "application/json", "X-Passphrase": settings.pass || "", "X-Device": encodeURIComponent(settings.device || "") }, body: "{}",
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `エラー(${res.status})`);
+    listenUrl = URL.createObjectURL(await res.blob());
+    const a = $("listenAudio"); a.src = listenUrl; a.hidden = false; $("listenBtn").hidden = true;
+    if ("mediaSession" in navigator) navigator.mediaSession.metadata = new MediaMetadata({ title: `朝のレポート ${md(date)}`, artist: "秘書" });
+    a.play().catch(() => {}); // 自動で始まらないときは、再生ボタンを押す
+  } catch (e) {
+    $("listenNote").textContent = e.message === "Failed to fetch" ? "サーバーにつながりません" : e.message; $("listenNote").hidden = false;
+  } finally { $("listenBtn").disabled = false; $("listenBtn").textContent = "🔊 聞く(読み上げ)"; }
+};
 
 // ---- 📅 カレンダー(Googleカレンダーが正本。表示のたびに読み直す。前回の分はこの端末に控えて、すぐ出す) ----
 const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
