@@ -24,9 +24,18 @@
   .hint { color:var(--sub); font-size:14px; display:flex; justify-content:space-between; gap:8px; margin:4px 2px 0; }
   #count { white-space:nowrap; }
   .rec-box { margin-bottom:10px; }
-  .rec-box .row-btns { margin:0 0 6px; }
-  button.rec { flex:1; background:#c0392b; border-color:#c0392b; color:#fff; font-weight:700; }
-  button.rec.on { background:#fff; color:#c0392b; animation:blink 1.6s infinite; }
+  /* 話す:0円(青)と高精度(赤枠)の2つのタイル。押すとその場で始まり、押したタイルが赤い「■ 止める 経過時間」になる */
+  .tiles { display:flex; gap:8px; }
+  .tile { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; border-radius:16px; padding:14px 6px 12px; min-height:0; line-height:1.3; }
+  .tile .ic { font-size:28px; line-height:1.1; } .tile b { font-size:16px; } .tile small { font-size:11px; opacity:.85; font-weight:400; }
+  .tile.t-sr { background:#1e88ff; border:1.5px solid #1e88ff; color:#fff; }
+  .tile.t-rec { background:#fdeceb; border:1.5px solid #e5484d; color:#c0392b; }
+  .tile.on { background:#e5484d; border-color:#e5484d; color:#fff; animation:blink 1.6s infinite; }
+  .tile:disabled { opacity:.35; animation:none; }
+  .filelink { display:flex; align-items:center; gap:10px; margin:6px 2px 0; } .filelink .link { min-height:32px; padding:2px 0; font-size:14px; background:none; border:none; color:var(--acc); }
+  @media (prefers-color-scheme: dark) { .filelink .link { color:#5aa9ff; } }
+  #recStatus:empty { display:none; }
+  @media (prefers-color-scheme: dark) { .tile.t-rec { background:#2a1f22; color:#ffb3b5; } }
   @keyframes blink { 50% { opacity:.6; } }
   .row-btns { display:flex; gap:10px; margin:12px 0; flex-wrap:wrap; }
   .row-btns .main { flex:1; }
@@ -311,18 +320,17 @@
     <header><h1>話す</h1><button class="link" id="openSettings2" aria-label="設定" style="font-size:22px">⚙</button></header>
     <section id="speak">
       <div class="rec-box">
-        <div class="row-btns">
-          <button id="recBtn" class="rec">● 録音を始める</button>
-          <button id="srBtn" hidden>🎙 0円で話す</button>
-          <button id="fileBtn">📂 音声ファイル</button>
-          <button id="retryBtn" hidden>文字起こしをやり直す</button>
+        <div class="tiles">
+          <button id="srBtn" class="tile t-sr" hidden><span class="ic">🎙</span><b>0円で話す</b><small>iPhoneの音声認識</small></button>
+          <button id="recBtn" class="tile t-rec"><span class="ic">●</span><b>高精度で録音</b><small>1分 約0.7円</small></button>
         </div>
+        <div class="filelink"><button class="link" id="fileBtn">📂 音声ファイルから文字にする</button><button id="retryBtn" hidden>文字起こしをやり直す</button></div>
         <!-- 「audio/*」だと iPhone が写真・ビデオのメニューを先に出すので、拡張子だけにして「ファイル」を直接開く -->
         <input type="file" id="fileIn" accept=".m4a,.mp3,.wav,.aac" hidden>
         <div id="recStatus" class="hint"></div>
       </div>
-      <textarea id="input" placeholder="予定・ToDo・思いついたことなど、自由に話してください。&#10;例:「明日は洗車をする。来週の水曜14時から税理士さんと打ち合わせ…」&#10;キーボードの🎤でも話せます。"></textarea>
-      <div class="hint"><span>聞き間違いや「えー」はそのままでOK。患者さんの情報は話さないでください。</span><span id="count">0字</span></div>
+      <textarea id="input" placeholder="予定・ToDo・思いついたことなど、自由に話してください。聞き間違いや「えー」はそのままでOK。&#10;例:「明日は洗車をする。来週の水曜14時から税理士さんと打ち合わせ…」"></textarea>
+      <div class="hint"><span>患者さんの情報は話さないでください</span><span id="count">0字</span></div>
       <div class="row-btns">
         <button class="main" id="run">まとめて仕分ける</button>
         <button id="clear">消す</button>
@@ -581,7 +589,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "e083fc9bcc2e37a03caddc6a0ce773d3a980cab0";
+const BUILD = "e74882a1c18031798619efc2e7249bfb1ce2da35";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -864,9 +872,9 @@ function render() {
   const transcribing = recording || sending || queue.length > 0 || (waitLast && !lastStopped);
   $("save").disabled = saved; $("fileBtn").disabled = saved || recording || srOn; $("run").disabled = saved || transcribing || srOn; $("recBtn").disabled = saved || srOn;
   $("srBtn").hidden = !SR_API; $("srBtn").disabled = saved || recording;
+  paintTiles();
   for (const el of $("result").querySelectorAll("input, select, textarea")) el.disabled = saved;
   bodyBox.contentEditable = saved ? "false" : BODY_MODE;
-  if (!recording) $("recBtn").textContent = draft.input.trim() ? "● 続けて録音する" : "● 録音を始める";
   $("nextRow").hidden = !saved;
   if (saved) setStatus(savedText(draft.saved), draft.saved.warn ? "err" : "ok");
   recInfo();
@@ -980,13 +988,25 @@ function pickType() {
   return "";
 }
 const mmss = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
+// 話すタイル(0円/高精度)。押したほうが赤い「■ 止める 経過時間」、何か話してあれば「続けて〜」
+function tile(id, ic, title, sub, on) {
+  const b = $(id); b.classList.toggle("on", !!on);
+  b.querySelector(".ic").textContent = ic; b.querySelector("b").textContent = title; b.querySelector("small").textContent = sub;
+}
+function paintTiles() {
+  const more = !!draft.input.trim();
+  if (srOn) tile("srBtn", "■", `止める ${mmss(Date.now() - srT0)}`, "聞いています…(0円)", true);
+  else tile("srBtn", "🎙", more ? "続けて話す" : "0円で話す", "iPhoneの音声認識");
+  if (recording) tile("recBtn", "■", `止める ${mmss(Date.now() - recStart)}`, "録音中・1分 約0.7円", true);
+  else tile("recBtn", "●", more ? "続けて録音" : "高精度で録音", "1分 約0.7円");
+}
 function recInfo() {
+  paintTiles();
   const parts = [];
-  if (recording) parts.push(`● 録音中 ${mmss(Date.now() - recStart)}`);
   if (doneCount) parts.push(`文字にした区切り ${doneCount}本`);
   if (sending || queue.length || (waitLast && !lastStopped)) parts.push("文字起こし中…");
   if (failed.length) parts.push(`失敗 ${failed.length}本`);
-  $("recStatus").textContent = parts.length ? parts.join("・") : "録音は黙っていても止まりません。止めると文字になって下の欄に追記されます。";
+  $("recStatus").textContent = parts.join("・");
 }
 async function keepAwake() { try { wakeLock = await navigator.wakeLock?.request("screen"); } catch { wakeLock = null; } }
 // ほかのアプリに移ったり画面を消したりすると、iPhone がマイクを止める(Webアプリの決まり)。
@@ -1107,8 +1127,7 @@ async function startRecording() {
   catch { setStatus("マイクを使えませんでした。マイクの使用を許可してください", "err"); return; }
   recording = true; recStart = Date.now(); waitLast = false; lastStopped = false; lenAtStart = draft.input.length; firstSeg = true;
   if (!draft.startedAt) { draft.startedAt = recStart; saveDraft(); }
-  $("recBtn").textContent = "■ 録音を止める"; $("recBtn").classList.add("on");
-  setStatus(""); render();
+  setStatus("録音中…(黙っていても止まりません)。話し終わったら「■ 止める」"); render();
   hiddenAt = 0; micCut = false; watchMic();
   startSegment();
   segTimer = setInterval(() => { recorder.stop(); startSegment(); }, SEGMENT_MS);
@@ -1122,7 +1141,6 @@ function stopRecording() {
   stream?.getTracks().forEach((t) => t.stop());
   stopLevel();
   wakeLock?.release?.(); wakeLock = null;
-  $("recBtn").classList.remove("on");
   render();
 }
 $("recBtn").onclick = () => (recording ? stopRecording() : startRecording());
@@ -1132,7 +1150,7 @@ $("recBtn").onclick = () => (recording ? stopRecording() : startRecording());
 // (つなぎ目の言葉が少し抜けることがある)。長い話・大事な話は「● 録音」(OpenAI、高精度)と使い分ける
 var srOn = false; // render() が起動直後に読むので var
 var SR_API = window.SpeechRecognition || window.webkitSpeechRecognition;
-let srRec = null, srFails = 0, srStartedAt = 0;
+let srRec = null, srFails = 0, srStartedAt = 0, srT0 = 0, srClock = null;
 function srAppend(text) {
   text = text.trim(); if (!text) return;
   if (!draft.startedAt) draft.startedAt = Date.now();
@@ -1165,8 +1183,8 @@ function srStartOnce() {
   r.start();
 }
 function srStart() {
-  srOn = true; srFails = 0; keepAwake();
-  $("srBtn").textContent = "■ 止める(0円)"; $("srBtn").classList.add("rec");
+  srOn = true; srFails = 0; srT0 = Date.now(); keepAwake();
+  clearInterval(srClock); srClock = setInterval(paintTiles, 1000);
   setStatus("聞いています…(0円)。話し終わったら「■ 止める」");
   render();
   try { srStartOnce(); } catch { srStop(); setStatus("iPhoneの音声認識が使えません。「● 録音を始める」を使ってください", "err"); }
@@ -1176,7 +1194,7 @@ function srStop() {
   try { srRec?.stop(); } catch {}
   setTimeout(() => { try { srRec?.abort(); } catch {} srRec = null; }, 800); // 最後の言葉を受け取ってからマイクを手放す
   wakeLock?.release?.(); wakeLock = null;
-  $("srBtn").textContent = "🎙 0円で話す"; $("srBtn").classList.remove("rec");
+  clearInterval(srClock);
   render();
   if (draft.input.trim()) setStatus("文字にしました(0円)。直したり続けて話したりしてから「まとめて仕分ける」を押してください", "ok");
 }
