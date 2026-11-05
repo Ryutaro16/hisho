@@ -313,6 +313,7 @@
       <div class="rec-box">
         <div class="row-btns">
           <button id="recBtn" class="rec">● 録音を始める</button>
+          <button id="srBtn" hidden>🎙 0円で話す</button>
           <button id="fileBtn">📂 音声ファイル</button>
           <button id="retryBtn" hidden>文字起こしをやり直す</button>
         </div>
@@ -580,7 +581,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "55aa754fd793a7fc88f2c27f5a525fc9f9c4092a";
+const BUILD = "e083fc9bcc2e37a03caddc6a0ce773d3a980cab0";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -861,7 +862,8 @@ function render() {
   if (m) { fillForm(m); renderChecks(m.needs_check); renderMeta(draft.meta); renderMoodSave(); }
   const saved = !!draft.saved;
   const transcribing = recording || sending || queue.length > 0 || (waitLast && !lastStopped);
-  $("save").disabled = saved; $("fileBtn").disabled = saved || recording; $("run").disabled = saved || transcribing; $("recBtn").disabled = saved;
+  $("save").disabled = saved; $("fileBtn").disabled = saved || recording || srOn; $("run").disabled = saved || transcribing || srOn; $("recBtn").disabled = saved || srOn;
+  $("srBtn").hidden = !SR_API; $("srBtn").disabled = saved || recording;
   for (const el of $("result").querySelectorAll("input, select, textarea")) el.disabled = saved;
   bodyBox.contentEditable = saved ? "false" : BODY_MODE;
   if (!recording) $("recBtn").textContent = draft.input.trim() ? "● 続けて録音する" : "● 録音を始める";
@@ -1124,6 +1126,61 @@ function stopRecording() {
   render();
 }
 $("recBtn").onclick = () => (recording ? stopRecording() : startRecording());
+
+// 🎙 0円で話す:iPhone の音声認識(SpeechRecognition。音声は Apple に送られて文字になる。費用0円)。
+// 決まった言葉から下の欄に足していく。黙ったり1分ほどたったりすると iPhone が止めるので、止まったら自動で聞き直す
+// (つなぎ目の言葉が少し抜けることがある)。長い話・大事な話は「● 録音」(OpenAI、高精度)と使い分ける
+var srOn = false; // render() が起動直後に読むので var
+var SR_API = window.SpeechRecognition || window.webkitSpeechRecognition;
+let srRec = null, srFails = 0, srStartedAt = 0;
+function srAppend(text) {
+  text = text.trim(); if (!text) return;
+  if (!draft.startedAt) draft.startedAt = Date.now();
+  draft.input += (draft.input && !/[\n\s]$/.test(draft.input) ? "\n" : "") + text;
+  input.value = draft.input; $("count").textContent = draft.input.length + "字"; saveDraft();
+}
+function srStartOnce() {
+  const r = new SR_API(); srRec = r; srStartedAt = Date.now();
+  r.lang = "ja-JP"; r.continuous = true; r.interimResults = true;
+  r.onresult = (e) => {
+    let interim = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) { srAppend(e.results[i][0].transcript); srFails = 0; } else interim += e.results[i][0].transcript;
+    }
+    setStatus(interim ? "聞き取り中:" + interim : "聞いています…(0円)。話し終わったら「■ 止める」");
+  };
+  r.onerror = (e) => {
+    if (["not-allowed", "service-not-allowed", "audio-capture", "language-not-supported"].includes(e.error)) {
+      srStop(); setStatus("iPhoneの音声認識が使えません。「● 録音を始める」を使ってください", "err");
+    }
+  };
+  r.onend = () => {
+    try { r.abort(); } catch {}
+    if (!srOn) return;
+    // すぐ終わるのが続く(つながらない など)ときは止める。それ以外は聞き直す
+    srFails = Date.now() - srStartedAt < 1500 ? srFails + 1 : 0;
+    if (srFails >= 5) { srStop(); setStatus("音声認識がすぐ止まってしまいます。通信状態を確かめるか「● 録音」を使ってください", "err"); return; }
+    try { srStartOnce(); } catch { srStop(); }
+  };
+  r.start();
+}
+function srStart() {
+  srOn = true; srFails = 0; keepAwake();
+  $("srBtn").textContent = "■ 止める(0円)"; $("srBtn").classList.add("rec");
+  setStatus("聞いています…(0円)。話し終わったら「■ 止める」");
+  render();
+  try { srStartOnce(); } catch { srStop(); setStatus("iPhoneの音声認識が使えません。「● 録音を始める」を使ってください", "err"); }
+}
+function srStop() {
+  srOn = false;
+  try { srRec?.stop(); } catch {}
+  setTimeout(() => { try { srRec?.abort(); } catch {} srRec = null; }, 800); // 最後の言葉を受け取ってからマイクを手放す
+  wakeLock?.release?.(); wakeLock = null;
+  $("srBtn").textContent = "🎙 0円で話す"; $("srBtn").classList.remove("rec");
+  render();
+  if (draft.input.trim()) setStatus("文字にしました(0円)。直したり続けて話したりしてから「まとめて仕分ける」を押してください", "ok");
+}
+$("srBtn").onclick = () => (srOn ? srStop() : srStart());
 
 async function sendQueue() {
   if (sending || failed.length) return;
