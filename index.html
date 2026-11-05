@@ -69,6 +69,10 @@
   .editor { min-height:6em; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; white-space:pre-wrap; word-break:break-word; outline:none; line-height:1.6; font-size:17px; }
   .editor:focus { border-color:var(--acc); box-shadow:0 0 0 1px var(--acc); }
   .searchbox { position:relative; margin-bottom:8px; }
+  .askbox { display:flex; gap:6px; } .askbox input { flex:1; min-width:0; margin:0; } .askbox button { flex:none; }
+  .asknote { font-size:12px; margin:4px 2px 8px; }
+  #askAns { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--acc); border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:15px; line-height:1.5; }
+  #askAns .lrow { padding-left:0; padding-right:0; }
   .searchbox input::-webkit-search-cancel-button { display:none; }
   /* 検索中の帯:何の言葉で何件か+解除 */
   .searchbar { display:flex; align-items:center; justify-content:space-between; gap:8px; background:#fff4e5; color:#1f2933; border:1px solid #f0b429; border-radius:10px; padding:6px 6px 6px 12px; margin-bottom:10px; font-size:14px; }
@@ -431,7 +435,13 @@
   <div id="pageList" hidden>
     <header><button class="link back" data-back="pageHome">‹ ホーム</button><button id="addItem">＋ 追加</button></header>
     <div class="chips" id="chips"></div>
-    <label class="muted showdone"><input type="checkbox" id="showDone"> 完了したものも見る</label>
+    <div id="remBox" hidden>
+      <div class="searchbox"><input id="remSearch" type="search" placeholder="🔍 覚えておくことを検索"></div>
+      <div class="askbox"><input id="askQ" placeholder="🤖 秘書に聞く(例:タイヤのこと何か言ってた?)" enterkeyhint="send"><button id="askBtn">聞く</button></div>
+      <div class="muted asknote">言葉がうろ覚えでも、AIが意味の近いものを探します(1回 約1〜3円)</div>
+      <div id="askAns" hidden></div>
+    </div>
+    <label class="muted showdone"><input type="checkbox" id="showDone"> <span id="showDoneLbl">完了したものも見る</span></label>
     <div id="list"></div>
   </div>
 
@@ -509,7 +519,7 @@
   <div class="two"><label>分野<select id="itCat"></select></label><label>期限<input type="date" id="itDue"></label></div>
   <label>相手<input id="itPerson"></label>
   <label>くわしく(1行に1つ)<textarea id="itDetail" rows="5"></textarea></label>
-  <div class="row-btns"><button class="main" id="itSave">保存</button><button id="itCancel">やめる</button><button class="danger" id="itDel">削除</button></div>
+  <div class="row-btns"><button class="main" id="itSave">保存</button><button id="itCancel">やめる</button><button id="itStow" hidden>📦 しまう</button><button class="danger" id="itDel">削除</button></div>
 </dialog>
 
 <dialog id="memoDlg">
@@ -526,7 +536,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "259de95868a65ab356272f305fda81a8fcba42ee";
+const BUILD = "abdc8b6f9a98db4ef2a2584a40759edc679da84c";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length) return;
   try {
@@ -1118,7 +1128,7 @@ for (const id of ["title", "tags", "summary", "body"]) {
 
 // ---- 📋 まとめ ----
 const VIEWS = [
-  ["todo", "✅ ToDo", ["ToDo"]], ["idea", "💡 アイデア", ["アイデア"]], ["goal", "🎯 目標", ["目標・人生設計"]],
+  ["todo", "✅ ToDo", ["ToDo"]], ["remember", "🧠 覚えておく", ["覚えておくこと"]], ["idea", "💡 アイデア", ["アイデア"]], ["goal", "🎯 目標", ["目標・人生設計"]],
   ["people", "🤝 人・約束", ["人・約束"]], ["learn", "📚 学び", ["学び"]], ["shop", "🛒 買い物", ["買い物・欲しいもの"]],
   ["record", "📖 記録", []], // 分野は個人の設定から(applyProfile)
 ];
@@ -1151,11 +1161,14 @@ async function loadList() {
   for (const b of $("chips").children) b.classList.toggle("on", b.dataset.v === view);
   const v = VIEWS.find((x) => x[0] === view) || VIEWS[0];
   $("showDone").parentElement.hidden = view === "record" || view === "goal" || view === "idea";
+  $("remBox").hidden = view !== "remember";
+  $("showDoneLbl").textContent = view === "remember" ? "しまったものも見る" : "完了したものも見る";
   if (!$("list").children.length) $("list").innerHTML = `<div class="muted">読み込み中…</div>`;
   try {
-    const { items } = await post("/api/items", { categories: v[2], status: $("showDone").checked || !CHECKABLE.includes(v[2][0]) ? "" : "未着手" });
+    const { items } = await post("/api/items", { categories: v[2], status: $("showDone").checked || !(CHECKABLE.includes(v[2][0]) || view === "remember") ? "" : "未着手" });
     listItemsCache = items;
     if (view !== v[0]) return;
+    if (view === "remember") { renderRemember(); return; }
     if (!items.length) { $("list").innerHTML = `<div class="soon">まだありません。🎤で話すと、ここにたまっていきます</div>`; return; }
     if (view === "todo") {
       const t = todayStr(), tm = addDays(t, 1), we = weekEnd(), nwe = addDays(we, 7), open = items.filter((i) => i.status !== "完了");
@@ -1177,6 +1190,37 @@ async function loadList() {
     }
   } catch (e) { $("list").innerHTML = `<div class="soon">${esc(e.message)}</div>`; }
 }
+// 🧠 覚えておくこと:新しい順。検索欄の言葉(空白で区切ると全部を含むもの)で絞る。しまったものは下に
+function renderRemember() {
+  const words = $("remSearch").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const hit = (i) => words.every((w) => (i.title + "\n" + i.detail).toLowerCase().includes(w));
+  const items = listItemsCache.filter(hit);
+  const open = items.filter((i) => i.status !== "完了"), stowed = items.filter((i) => i.status === "完了");
+  $("list").innerHTML = !listItemsCache.length ? `<div class="soon">まだありません。「〜を覚えておいて」と話すと、ここに入ります</div>`
+    : !items.length ? `<div class="soon">「${esc($("remSearch").value.trim())}」は見つかりませんでした。うろ覚えなら、上の「秘書に聞く」で探せます</div>`
+    : open.map((i) => rowHtml(i)).join("") + group("📦 しまったもの", stowed);
+  if (words.length) markHits($("list"), $("remSearch").value.trim().split(/\s+/).filter(Boolean).slice(0, 5));
+}
+$("remSearch").addEventListener("input", renderRemember);
+// 秘書に聞く(AIが覚えておくことの中から探して答える)
+async function askSecretary() {
+  const question = $("askQ").value.trim();
+  if (!question) { $("askQ").focus(); return; }
+  $("askBtn").disabled = true; $("askAns").hidden = false; $("askAns").textContent = "探しています…";
+  try {
+    const { result } = await post("/api/ask", { question, today: todayStr() });
+    $("askAns").innerHTML = `<div>${esc(result.answer)}</div>` + result.items.map((i) => rowHtml(i)).join("");
+    for (const i of result.items) if (!listItemsCache.some((x) => x.id === i.id)) listItemsCache.push(i);
+  } catch (e) { $("askAns").textContent = e.message; }
+  $("askBtn").disabled = false;
+}
+$("askBtn").onclick = askSecretary;
+$("askQ").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) askSecretary(); });
+$("askAns").addEventListener("click", (e) => {
+  const tx = e.target.closest(".tx");
+  if (tx) openItem(listItemsCache.find((i) => String(i.id) === tx.closest(".lrow").dataset.id));
+});
+
 // 今いる画面(ホームか一覧)を読み直す
 const refreshCurrent = () => (!$("pageHome").hidden ? loadHome() : loadList());
 let homeCache = [];
@@ -1213,6 +1257,8 @@ function openItem(it) {
   $("itName").value = it?.title || ""; $("itCat").value = it?.category || (v?.[2]?.[0] ?? "ToDo");
   $("itDue").value = it?.due || ""; $("itPerson").value = it?.person || ""; $("itDetail").value = it?.detail || "";
   $("itDel").hidden = !it;
+  $("itStow").hidden = !it || it.category !== "覚えておくこと";
+  $("itStow").textContent = it?.status === "完了" ? "↩ 戻す" : "📦 しまう";
   $("itemDlg").showModal();
 }
 $("addItem").onclick = () => openItem(null);
@@ -1225,6 +1271,11 @@ $("itSave").onclick = async () => {
     $("itemDlg").close(); toast(itEditing ? "直しました" : "追加しました"); refreshCurrent();
     if (r.warn) alert(r.warn); // Googleのタスクに入らなかったとき
   } catch (e) { alert(e.message); }
+};
+// 覚えておくことの「しまう」(もう要らない。消さずに一覧の下へ)/「戻す」
+$("itStow").onclick = async () => {
+  const back = itEditing.status === "完了";
+  try { await post("/api/item", { action: "update", id: itEditing.id, item: { status: back ? "未着手" : "完了" } }); $("itemDlg").close(); toast(back ? "戻しました" : "しまいました(「しまったものも見る」で見られます)"); refreshCurrent(); } catch (e) { alert(e.message); }
 };
 $("itDel").onclick = async () => {
   if (!confirm(`「${itEditing.title}」を削除します。(30日間は⚙設定のゴミ箱から戻せます)`)) return;
@@ -1257,8 +1308,7 @@ $("memoSearch").addEventListener("input", () => { clearTimeout(memoTimer); memoT
 $("memoSearchClear").onclick = () => { $("memoSearch").value = ""; loadMemos(); };
 // 検索している間だけ、見つかった言葉にマーカー(一覧と、開いたメモの中)
 const searchWords = () => $("memoSearch").value.trim().split(/\s+/).filter(Boolean).slice(0, 5);
-function markHits(root) {
-  const words = searchWords();
+function markHits(root, words = searchWords()) {
   if (!words.length) return;
   const re = new RegExp(words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "g");
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), nodes = [];
@@ -1344,7 +1394,8 @@ async function loadHome() {
   try {
     const h = await post("/api/home", { today: todayStr() });
     const fam = PROFILE?.family, famRows = fam ? h.family || [] : [];
-    homeCache = [...famRows, ...h.focus, ...h.todos, ...h.ideas.latest, ...h.shop.latest];
+    const rem = h.remember || { count: 0, latest: [] };
+    homeCache = [...famRows, ...h.focus, ...h.todos, ...rem.latest, ...h.ideas.latest, ...h.shop.latest];
     const t = todayStr(), tm = addDays(t, 1), we = addDays(t, 6);
     const notFocus = h.todos.filter((i) => !i.focused);
     const byDue = (a, b) => (a.due || "9").localeCompare(b.due || "9") || b.id - a.id;
@@ -1366,6 +1417,8 @@ async function loadHome() {
       (laterShow.length ? `<div class="g">それ以降・期限なし</div>${rows(laterShow)}` : "") +
       (!notFocus.length ? `<div class="empty">ToDoはありません</div>` : "") +
       (todoRest > 0 ? `<button class="link more-todo" data-open="todo">ほか ${todoRest}件を見る ›</button>` : "") + `</div>` +
+      `<div class="wg"><div class="wgt"><span>🧠 覚えておくこと</span><button data-open="remember">すべて・検索 ${rem.count} ›</button></div>` +
+      (rem.latest.length ? rem.latest.map((i) => rowHtml(i, "remember")).join("") : `<div class="empty">「〜を覚えておいて」と話すと、ここに入ります</div>`) + `</div>` +
       `<div class="wg"><div class="wgt"><span>💡 アイデア</span><button data-open="idea">すべて ${h.ideas.count} ›</button></div>` +
       (h.ideas.latest.length ? rows(h.ideas.latest) : `<div class="empty">まだありません</div>`) + `</div>` +
       `<div class="wg"><div class="wgt"><span>🎯 目標</span><button data-open="goal">すべて ${h.goals.count} ›</button></div>` +
