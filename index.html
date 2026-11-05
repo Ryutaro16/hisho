@@ -141,6 +141,7 @@
   .lrow .tx { flex:1; min-width:0; cursor:pointer; }
   .lrow .tx small { display:block; color:var(--sub); font-size:12px; margin-top:1px; }
   .lrow.done .tx > span { text-decoration:line-through; color:var(--sub); }
+  .lrow .undo { flex:none; align-self:center; color:var(--acc); font-size:12px; font-weight:700; }
   .lrow.over small .due { color:var(--ng); font-weight:700; }
   .group h3 small { font-weight:400; color:var(--sub); }
   .group h3.over { color:var(--ng); }
@@ -589,7 +590,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "a13dd3723eb948c31ef214f8ea44116f0d8294d7";
+const BUILD = "f7e2a560567bf69990af7583a46155e9d178e1de";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -1285,10 +1286,11 @@ function rowHtml(it, mode = view) {
   // くわしくが2行以上なら「中身N件」、1行なら短く
   const det = dl.length > 1 ? `中身${dl.length}件 ›` : dl[0] ? esc(dl[0].length > 40 ? dl[0].slice(0, 40) + "…" : dl[0]) : "";
   const sub = [it.area, it.kind, it.person && "👤" + it.person, it.due && `<span class="due">期限 ${md(it.due)}</span>`, det, mode !== "todo" && it.item_date && md(it.item_date)].filter(Boolean);
-  return `<div class="lrow${it.status === "完了" ? " done" : ""}${over ? " over" : ""}" data-id="${it.id}">
-    ${CHECKABLE.includes(it.category) && it.status !== "完了" ? `<span class="star${it.focused ? " on" : ""}" role="button" aria-label="今やることに入れる">${it.focused ? "★" : "☆"}</span>` : ""}
-    ${CHECKABLE.includes(it.category) ? `<input type="checkbox" ${it.status === "完了" ? "checked" : ""} aria-label="完了">` : ""}
-    <div class="tx"><span>${esc(it.title)}</span>${sub.length ? `<small>${sub.map((x) => (x.startsWith("<") ? x : esc(x))).join("・")}</small>` : ""}</div></div>`;
+  const done = it.status === "完了" || doneWait.has(String(it.id));
+  return `<div class="lrow${done ? " done" : ""}${over ? " over" : ""}" data-id="${it.id}">
+    ${CHECKABLE.includes(it.category) && !done ? `<span class="star${it.focused ? " on" : ""}" role="button" aria-label="今やることに入れる">${it.focused ? "★" : "☆"}</span>` : ""}
+    ${CHECKABLE.includes(it.category) ? `<input type="checkbox" ${done ? "checked" : ""} aria-label="完了">` : ""}
+    <div class="tx"><span>${esc(it.title)}</span>${sub.length ? `<small>${sub.map((x) => (x.startsWith("<") ? x : esc(x))).join("・")}</small>` : ""}</div>${doneWait.has(String(it.id)) ? `<span class="undo">もう一度押すと戻る</span>` : ""}</div>`;
 }
 function group(title, items, cls = "") { return items.length ? `<div class="group"><h3 class="${cls}">${title} <small>${items.length}</small></h3>${items.map(rowHtml).join("")}</div>` : ""; }
 async function loadList() {
@@ -1361,14 +1363,38 @@ $("askAns").addEventListener("click", (e) => {
 // 今いる画面(ホームか一覧)を読み直す
 const refreshCurrent = () => (!$("pageHome").hidden ? loadHome() : loadList());
 let homeCache = [];
+// □で完了にしたら4秒は取り消し線で残し、もう一度押せば戻す(2026-11-06 案B)。
+// 記録への保存は4秒たってから(Googleのタスク・奥さんへの「済みました」もそのとき)なので、取り消せば何も送らない
+const DONE_WAIT = 4000;
+var doneWait = new Map(); // id → タイマー
+async function sendDone(id) {
+  clearTimeout(doneWait.get(id)); doneWait.delete(id);
+  try { await post("/api/item", { action: "update", id, item: { status: "完了" } }); } catch (err) { alert(err.message); }
+  refreshCurrent();
+}
+// アプリを閉じる・ほかのアプリへ移るときは、待たずに保存する
+document.addEventListener("visibilitychange", () => { if (document.hidden) for (const id of [...doneWait.keys()]) sendDone(id); });
 for (const box of ["list", "home"]) {
   $(box).addEventListener("change", async (e) => {
     const row = e.target.closest(".lrow");
     if (!row || e.target.type !== "checkbox") return;
+    const id = row.dataset.id;
+    if (doneWait.has(id)) {
+      // 待っている間にもう一度押した → 取り消し
+      clearTimeout(doneWait.get(id)); doneWait.delete(id);
+      row.outerHTML = rowHtml(homeCache.concat(listItemsCache).find((i) => String(i.id) === id) || { id, title: row.querySelector(".tx > span").textContent, category: "ToDo" }, box === "list" ? view : row.closest(".fam") ? "family" : "todo");
+      return;
+    }
+    if (e.target.checked) {
+      doneWait.set(id, setTimeout(() => sendDone(id), DONE_WAIT));
+      row.classList.add("done");
+      row.querySelector(".star")?.remove();
+      row.insertAdjacentHTML("beforeend", `<span class="undo">もう一度押すと戻る</span>`);
+      return;
+    }
     try {
-      await post("/api/item", { action: "update", id: row.dataset.id, item: { status: e.target.checked ? "完了" : "未着手" } });
-      if (e.target.checked) toast("完了にしました");
-      setTimeout(refreshCurrent, e.target.checked ? 500 : 0);
+      await post("/api/item", { action: "update", id, item: { status: "未着手" } });
+      refreshCurrent();
     } catch (err) { e.target.checked = !e.target.checked; alert(err.message); }
   });
   $(box).addEventListener("click", async (e) => {
