@@ -565,9 +565,9 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "a38c2bc52f68b84602c8524db2d40dd675402820";
+const BUILD = "8e3eccd9e2f22cd8c38309403ad30ea5115e3a87";
 async function checkUpdate() {
-  if (BUILD.startsWith("__") || recording || busy || sending || queue.length) return;
+  if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
     const html = await (await fetch(location.pathname, { cache: "no-store" })).text();
     const v = html.match(/const BUILD = "([^"]+)"/)?.[1];
@@ -633,7 +633,7 @@ function showPage(page, fromPop = false) {
   if (page === "pageLeave") loadLeave();
   if (page === "pageNote") loadNote();
   if (page === "pageMemo") loadMemos();
-  if (page === "pageMorning") { loadReport(); loadWeather(); loadLeave(); }
+  if (page === "pageMorning") { loadReport(listenDate || undefined); loadWeather(); loadLeave(); } // 聞いている日があればその日のまま
   if (page === "pageSet") { $("pass").value = settings.pass || ""; $("api").value = settings.api || ""; $("device").value = settings.device || ""; $("clearMin").value = String(settings.clearMin ?? 60); $("aiModel").value = settings.model || "opus"; loadUsage(); loadTrash(); loadLineUsers(); }
   if (page === "pageSpeak") requestAnimationFrame(growAll);
   if (page === "pageCost") { TAB_OF.pageCost = TAB_OF.pageSet; renderCost(); }
@@ -1576,10 +1576,13 @@ function mdToHtml(text) {
   return out.join("");
 }
 async function loadReport(date) {
-  resetListen();
+  // 聞いている日のレポートに戻ってきたときは、読み上げをそのまま(止めない・消さない)。別の日を選んだときだけ片付ける
+  if (date && date !== listenDate) resetListen();
   $("report").innerHTML = `<div class="muted">読み込み中…</div>`;
   try {
     const { dates, report } = await post("/api/reports", { date });
+    if (report?.date !== listenDate) resetListen();
+    listenLabel(report?.date);
     $("repDate").innerHTML = dates.map((d) => `<option value="${d}" ${d === report?.date ? "selected" : ""}>${md(d)}</option>`).join("");
     $("repDate").hidden = !dates.length;
     $("report").innerHTML = report ? mdToHtml(report.body) : `<div class="muted">まだレポートがありません。毎朝5時にMacが作って、ここに置きます。</div>`;
@@ -1589,12 +1592,26 @@ $("repDate").onchange = () => loadReport($("repDate").value);
 
 // 🔊 朝のレポートの読み上げ。Macの定期タスクが作った音声ファイルを、押したときに読み込む(開くたびに通信量を使わないように)。
 // 音声ファイルとして再生するので、画面を消しても止まらず、車のBluetoothの再生・一時停止も使える
-let listenUrl = "";
+// 聞いた位置はこの端末に覚えておき(hisho:listenPos)、アプリを閉じたり他の音声で止まったりしても、次は続きから
+let listenUrl = "", listenDate = "", posSavedAt = 0;
+const mmssOf = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec) % 60).padStart(2, "0")}`;
+const savedPos = (date) => { const p = store.get("hisho:listenPos"); return p && p.date === date && p.t > 3 ? p.t : 0; };
+function listenLabel(date) { const t = savedPos(date); $("listenBtn").textContent = t ? `🔊 続きから聞く(${mmssOf(t)}〜)` : "🔊 聞く(読み上げ)"; }
 function resetListen() {
   const a = $("listenAudio"); a.pause(); a.hidden = true; a.removeAttribute("src");
   if (listenUrl) URL.revokeObjectURL(listenUrl);
-  listenUrl = ""; $("listenBtn").hidden = false; $("listenNote").hidden = true;
+  listenUrl = ""; listenDate = ""; $("listenBtn").hidden = false; $("listenNote").hidden = true;
 }
+$("listenAudio").addEventListener("timeupdate", (e) => {
+  if (!listenDate || Date.now() - posSavedAt < 2000) return;
+  posSavedAt = Date.now(); store.set("hisho:listenPos", { date: listenDate, t: e.target.currentTime });
+});
+$("listenAudio").addEventListener("pause", (e) => { if (listenDate) store.set("hisho:listenPos", { date: listenDate, t: e.target.currentTime }); });
+$("listenAudio").addEventListener("ended", () => { store.del("hisho:listenPos"); });
+$("listenNote").addEventListener("click", (e) => {
+  if (!e.target.closest("[data-restart]")) return;
+  const a = $("listenAudio"); a.currentTime = 0; a.play().catch(() => {}); $("listenNote").hidden = true;
+});
 $("listenBtn").onclick = async () => {
   const date = $("repDate").value;
   if (!date) return;
@@ -1605,12 +1622,21 @@ $("listenBtn").onclick = async () => {
     });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `エラー(${res.status})`);
     listenUrl = URL.createObjectURL(await res.blob());
-    const a = $("listenAudio"); a.src = listenUrl; a.hidden = false; $("listenBtn").hidden = true;
+    const a = $("listenAudio"), from = savedPos(date);
+    listenDate = date; a.src = listenUrl; a.hidden = false; $("listenBtn").hidden = true;
     if ("mediaSession" in navigator) navigator.mediaSession.metadata = new MediaMetadata({ title: `朝のレポート ${md(date)}`, artist: "秘書" });
+    // 前に止めたところから。最後の3秒より後なら最初から
+    if (from) {
+      await new Promise((ok) => { if (a.readyState >= 1) ok(); else a.addEventListener("loadedmetadata", ok, { once: true }); });
+      if (from < a.duration - 3) {
+        a.currentTime = from;
+        $("listenNote").innerHTML = `前回の続き(${mmssOf(from)})から再生しています <button class="link" data-restart>最初から</button>`; $("listenNote").hidden = false;
+      }
+    }
     a.play().catch(() => {}); // 自動で始まらないときは、再生ボタンを押す
   } catch (e) {
     $("listenNote").textContent = e.message === "Failed to fetch" ? "サーバーにつながりません" : e.message; $("listenNote").hidden = false;
-  } finally { $("listenBtn").disabled = false; $("listenBtn").textContent = "🔊 聞く(読み上げ)"; }
+  } finally { $("listenBtn").disabled = false; listenLabel(date); }
 };
 
 // ---- 📅 カレンダー(Googleカレンダーが正本。表示のたびに読み直す。前回の分はこの端末に控えて、すぐ出す) ----
