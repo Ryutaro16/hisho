@@ -330,7 +330,7 @@
         <div id="recStatus" class="hint"></div>
       </div>
       <textarea id="input" placeholder="予定・ToDo・思いついたことなど、自由に話してください。聞き間違いや「えー」はそのままでOK。&#10;例:「明日は洗車をする。来週の水曜14時から税理士さんと打ち合わせ…」"></textarea>
-      <div class="hint"><span>患者さんの情報は話さないでください</span><span id="count">0字</span></div>
+      <div class="hint"><span>プライバシーに関わることは話さないでください</span><span id="count">0字</span></div>
       <div class="row-btns">
         <button class="main" id="run">まとめて仕分ける</button>
         <button id="clear">消す</button>
@@ -589,7 +589,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "e74882a1c18031798619efc2e7249bfb1ce2da35";
+const BUILD = "c15696a878708db3bfa405db4ca541f6fd92d1eb";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -863,8 +863,11 @@ function renderChecks(c) {
   $("checks").innerHTML = c.length ? `<b>確認してください(${c.length}件)</b> AIが確信を持てなかったところです。<ul>${c.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>メモの本文の<mark class="guess">黄色の言葉</mark>がその場所です。` : "";
 }
 
+// 話している間・文字にしている間は、欄を一番下(最新)まで送る
+const toLatest = () => { input.scrollTop = input.scrollHeight; };
 function render() {
   input.value = draft.input; $("count").textContent = draft.input.length + "字";
+  if (recording || srOn || sending || queue.length) toLatest();
   const m = draft.memo;
   $("result").hidden = !m;
   if (m) { fillForm(m); renderChecks(m.needs_check); renderMeta(draft.meta); renderMoodSave(); }
@@ -1155,7 +1158,7 @@ function srAppend(text) {
   text = text.trim(); if (!text) return;
   if (!draft.startedAt) draft.startedAt = Date.now();
   draft.input += (draft.input && !/[\n\s]$/.test(draft.input) ? "\n" : "") + text;
-  input.value = draft.input; $("count").textContent = draft.input.length + "字"; saveDraft();
+  input.value = draft.input; $("count").textContent = draft.input.length + "字"; saveDraft(); toLatest();
 }
 function srStartOnce() {
   const r = new SR_API(); srRec = r; srStartedAt = Date.now();
@@ -1221,7 +1224,7 @@ async function sendQueue() {
     if (!data) { failed.push(blob, ...queue); queue = []; $("retryBtn").hidden = false; setStatus("文字起こしに失敗しました:" + err, "err"); break; }
     if (data.text) {
       draft.input += (draft.input && !draft.input.endsWith("\n") ? "\n" : "") + data.text;
-      input.value = draft.input; $("count").textContent = draft.input.length + "字";
+      input.value = draft.input; $("count").textContent = draft.input.length + "字"; toLatest();
     }
     doneCount++; draft.stt = (draft.stt || 0) + (data.yen || 0); saveDraft();
     recInfo();
