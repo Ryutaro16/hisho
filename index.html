@@ -589,7 +589,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "47bca3d0178f06bc357f2474dc77a76cbb8ea53e";
+const BUILD = "8e06a910a11e9ad4ada863754255e4f5d5d3fadd";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -979,8 +979,11 @@ function autoClear() {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") autoClear(); });
 setInterval(autoClear, 30e3);
 
-// ---- 録音(音声メモと同じ作り)。無音でも止まらない。1分ごとに区切って文字起こしに送る ----
-const SEGMENT_MS = 60 * 1000;
+// ---- 録音(音声メモと同じ作り)。無音でも止まらない。15秒ごとに区切って文字起こしに送る ----
+// 2026-11-05 文字が早く出るよう1分→15秒に(料金は送った秒数で決まるので、ほぼ同じ。1回ごとに1秒ほど上乗せされる分だけ増える)
+const SEGMENT_MS = 15 * 1000;
+// 音声ファイルの読み込みは急がないので1分ごと(送る回数を増やさない)
+const FILE_SEGMENT_MS = 60 * 1000;
 let recording = false, stream = null, recorder = null, segTimer = null, clock = null, wakeLock = null, recStart = 0;
 let queue = [], failed = [], sending = false, doneCount = 0;
 let waitLast = false, lastStopped = false, lenAtStart = 0, micName = "";
@@ -1104,7 +1107,7 @@ $("fileIn").onchange = async () => {
   // 話した日時は、ファイルの日時(録り終えた時刻)から長さを引いたもの。おかしければ今
   if (!draft.startedAt) { const st = f.lastModified - buf.duration * 1000; draft.startedAt = st > Date.now() - 30 * 864e5 && st < Date.now() ? st : Date.now(); saveDraft(); }
   lenAtStart = draft.input.length; waitLast = true; lastStopped = true;
-  const step = 16000 * SEGMENT_MS / 1000;
+  const step = 16000 * FILE_SEGMENT_MS / 1000;
   for (let i = 0; i < n; i += step) { const b = wavBlob(mono.subarray(i, Math.min(n, i + step)), 16000); b.rec = i === 0; queue.push(b); }
   render(); recInfo(); sendQueue();
 };
