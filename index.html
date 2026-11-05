@@ -70,6 +70,11 @@
   .editor:focus { border-color:var(--acc); box-shadow:0 0 0 1px var(--acc); }
   .searchbox { position:relative; margin-bottom:8px; }
   .askbox { display:flex; gap:6px; } .askbox input { flex:1; min-width:0; margin:0; } .askbox button { flex:none; }
+  /* 欄の中の🎙(写真アプリの検索欄のように右端に) */
+  .askin { position:relative; flex:1; min-width:0; display:flex; } .askin input { padding-right:46px; }
+  .askbox .askmic { position:absolute; right:3px; top:50%; transform:translateY(-50%); width:40px; min-height:36px; height:36px; padding:0; border:none; background:none; font-size:20px; border-radius:50%; }
+  .askbox .askmic.on { background:#e5484d; color:#fff; font-size:14px; }
+  .micnote { font-size:12px; margin:4px 2px 0; }
   .asknote { font-size:12px; margin:4px 2px 8px; }
   #askAns, .askans { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--acc); border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:15px; line-height:1.5; }
   #askAns .lrow, .askans .lrow { padding-left:0; padding-right:0; }
@@ -441,7 +446,8 @@
     <header><h1>メモ</h1></header>
     <div class="searchbox"><input id="memoSearch" type="search" placeholder="🔍 メモを検索"></div>
     <div class="searchbar" id="memoSearchBar" hidden><span id="memoSearchInfo"></span><button id="memoSearchClear">✕ 検索を解除</button></div>
-    <div class="askbox"><input id="maskQ" placeholder="🤖 秘書に聞く(例:税理士さんと何を話した?)" enterkeyhint="send"><button id="maskBtn">聞く</button></div>
+    <div class="askbox"><span class="askin"><input id="maskQ" placeholder="🤖 秘書に聞く(例:税理士さんと何を話した?)" enterkeyhint="send"><button class="askmic" data-for="maskQ" aria-label="声で入れる">🎙</button></span><button id="maskBtn">聞く</button></div>
+    <div class="muted micnote" id="maskQNote" hidden></div>
     <div class="muted asknote">今までのメモから、AIが関係のあるものを探して答えます(1回 約1〜3円)</div>
     <div id="maskAns" class="askans" hidden></div>
     <div id="memoList"></div>
@@ -453,7 +459,8 @@
     <div class="chips" id="chips"></div>
     <div id="remBox" hidden>
       <div class="searchbox"><input id="remSearch" type="search" placeholder="🔍 覚えておくことを検索"></div>
-      <div class="askbox"><input id="askQ" placeholder="🤖 秘書に聞く(例:タイヤのこと何か言ってた?)" enterkeyhint="send"><button id="askBtn">聞く</button></div>
+      <div class="askbox"><span class="askin"><input id="askQ" placeholder="🤖 秘書に聞く(例:タイヤのこと何か言ってた?)" enterkeyhint="send"><button class="askmic" data-for="askQ" aria-label="声で入れる">🎙</button></span><button id="askBtn">聞く</button></div>
+      <div class="muted micnote" id="askQNote" hidden></div>
       <div class="muted asknote">言葉がうろ覚えでも、AIが意味の近いものを探します(1回 約1〜3円)</div>
       <div id="askAns" hidden></div>
     </div>
@@ -558,7 +565,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "1e922d099fd51b7a1c869e5c5f166d87e3cbb40e";
+const BUILD = "a38c2bc52f68b84602c8524db2d40dd675402820";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length) return;
   try {
@@ -1245,7 +1252,7 @@ $("askBtn").onclick = askSecretary;
 $("askQ").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) askSecretary(); });
 // 閉じる:答えと質問の欄を空に戻す
 $("askAns").addEventListener("click", (e) => {
-  if (e.target.closest("#askClose")) { $("askAns").hidden = true; $("askAns").innerHTML = ""; $("askQ").value = ""; return; }
+  if (e.target.closest("#askClose")) { $("askAns").hidden = true; $("askAns").innerHTML = ""; $("askQ").value = ""; micNote("askQ", ""); return; }
   const tx = e.target.closest(".tx");
   if (tx) openItem(listItemsCache.find((i) => String(i.id) === tx.closest(".lrow").dataset.id));
 });
@@ -1353,6 +1360,61 @@ function markHits(root, words = searchWords()) {
   for (const d of root.querySelectorAll("details")) if (d.querySelector("mark.hit")) d.open = true;
 }
 $("memoList").addEventListener("click", (e) => { const r = e.target.closest(".lrow[data-memo]"); if (r) openMemo(r.dataset.memo); });
+// 「秘書に聞く」の欄の🎙。Webアプリからはキーボードの音声入力を起こせないので、ボタン自身が聞き取る。
+// まず iPhone の音声認識(SpeechRecognition、0円)。使えないとき(ホーム画面のアプリで動かない・許可がない など)だけ、
+// 録音して今の文字起こし(OpenAI、約0.1〜0.3円)に切り替える。どちらで聞き取ったかを欄の下に出す
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let micNow = null; // 聞いている最中のもの { btn, stop }
+const MIC_MAX_MS = 30000;
+function micNote(id, text) { const el = $(id + "Note"); el.hidden = !text; el.textContent = text || ""; }
+function micDone() { if (micNow) { micNow.btn.classList.remove("on"); micNow.btn.textContent = "🎙"; micNow = null; } }
+function micBySpeech(btn, id) {
+  const r = new SR(); let got = "", fellBack = false;
+  r.lang = "ja-JP"; r.interimResults = true; r.continuous = false;
+  r.onresult = (e) => { got = [...e.results].map((x) => x[0].transcript).join(""); $(id).value = got; };
+  r.onerror = (e) => {
+    if (got || e.error === "no-speech" || e.error === "aborted") return;
+    fellBack = true; micDone(); micByRecording(btn, id); // 音声認識が使えない → 録音して文字起こし
+  };
+  r.onend = () => { if (fellBack) return; micDone(); micNote(id, got ? "" : "聞き取れませんでした。もう一度🎙を押してください"); };
+  micNow = { btn, stop: () => r.stop() };
+  btn.classList.add("on"); btn.textContent = "■"; micNote(id, "聞いています…(話し終わると止まります)");
+  try { r.start(); } catch { fellBack = true; micDone(); micByRecording(btn, id); }
+}
+async function micByRecording(btn, id) {
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+  catch { micNote(id, "マイクが使えません。キーボードの🎙で話してください"); return; }
+  const type = pickType(), rec = new MediaRecorder(stream, type ? { mimeType: type } : undefined), parts = [];
+  const timer = setTimeout(() => rec.state === "recording" && rec.stop(), MIC_MAX_MS);
+  rec.ondataavailable = (e) => { if (e.data && e.data.size) parts.push(e.data); };
+  rec.onstop = async () => {
+    clearTimeout(timer); stream.getTracks().forEach((t) => t.stop()); micDone();
+    if (!parts.length) { micNote(id, "聞き取れませんでした"); return; }
+    micNote(id, "文字にしています…");
+    const blob = new Blob(parts, { type: rec.mimeType || type });
+    try {
+      const res = await fetch((settings.api || DEFAULT_API).replace(/\/$/, "") + "/api/transcribe?for=ask", {
+        method: "POST", headers: { "Content-Type": blob.type.split(";")[0], "X-Passphrase": settings.pass || "", "X-Device": encodeURIComponent(settings.device || "") }, body: blob,
+      });
+      const d = await res.json().catch(() => ({ error: `サーバーの応答を読めませんでした(${res.status})` }));
+      if (!res.ok || d.error) throw new Error(d.error || `エラー(${res.status})`);
+      $(id).value = d.text || "";
+      micNote(id, d.text ? `文字起こしで聞き取りました(${yenText(d.yen || 0)})` : "聞き取れませんでした");
+    } catch (e) { micNote(id, "文字にできませんでした:" + e.message); }
+  };
+  micNow = { btn, stop: () => rec.state === "recording" && rec.stop() };
+  btn.classList.add("on"); btn.textContent = "■"; micNote(id, "録音しています。話し終わったら■を押してください");
+  rec.start();
+}
+for (const btn of document.querySelectorAll(".askmic")) {
+  btn.onclick = (e) => {
+    e.preventDefault();
+    if (micNow) { const same = micNow.btn === btn; micNow.stop(); if (same) return; }
+    if (SR) micBySpeech(btn, btn.dataset.for); else micByRecording(btn, btn.dataset.for);
+  };
+}
+
 // 📝 秘書に聞く(メモ):AIが検索の言葉を考え、見つかったメモだけで答える。もとにしたメモを押すと開く
 async function askMemo() {
   const question = $("maskQ").value.trim();
@@ -1370,7 +1432,7 @@ async function askMemo() {
 $("maskBtn").onclick = askMemo;
 $("maskQ").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) askMemo(); });
 $("maskAns").addEventListener("click", (e) => {
-  if (e.target.closest("#maskClose")) { $("maskAns").hidden = true; $("maskAns").innerHTML = ""; $("maskQ").value = ""; return; }
+  if (e.target.closest("#maskClose")) { $("maskAns").hidden = true; $("maskAns").innerHTML = ""; $("maskQ").value = ""; micNote("maskQ", ""); return; }
   const r = e.target.closest(".lrow[data-memo]"); if (r) openMemo(r.dataset.memo);
 });
 async function openMemo(id) {
