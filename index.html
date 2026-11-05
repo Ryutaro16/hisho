@@ -276,6 +276,13 @@
   .month h5 { margin:8px 0 2px; font-size:13px; color:var(--ink); }
   .month div span:last-child { white-space:nowrap; }
   #exportCsv { width:100%; margin-top:10px; }
+  .costrow { display:flex; justify-content:space-between; align-items:center; width:100%; text-align:left; margin-top:16px; padding:12px; font-size:16px; }
+  .costrow small { color:var(--sub); font-size:13px; margin-left:4px; } .costrow .go { color:var(--sub); }
+  .costmon { display:flex; justify-content:space-between; align-items:center; margin:4px 0 8px; } .costmon b { font-size:18px; } .costmon button { font-size:24px; min-height:40px; padding:0 14px; } .costmon button:disabled { opacity:.25; }
+  .costtbl { width:100%; border-collapse:collapse; font-size:15px; } .costtbl td { padding:8px 0; border-top:1px solid var(--line); vertical-align:middle; }
+  .costtbl td.r { text-align:right; white-space:nowrap; padding-left:8px; } .costtbl td small { display:block; color:var(--sub); font-size:12px; }
+  #costMore details { margin-top:10px; font-size:14px; color:var(--sub); } #costMore summary { color:var(--ink); }
+  #costMore div { display:flex; justify-content:space-between; gap:10px; padding:2px 0; } #costMore h5 { margin:8px 0 2px; color:var(--ink); }
   .set label { display:block; font-size:15px; margin:10px 0 4px; }
   .muted { color:var(--sub); font-size:13px; }
   #toast { position:fixed; left:50%; bottom:90px; transform:translateX(-50%); background:#1f2933; color:#fff; padding:10px 18px; border-radius:20px; font-size:15px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:9; }
@@ -454,6 +461,19 @@
     <div id="list"></div>
   </div>
 
+  <!-- 💰 かかった金額(⚙設定から。機能ごとの内訳) -->
+  <div id="pageCost" hidden class="set">
+    <header><button class="link back" id="costBack">‹ 設定</button><h1>かかった金額</h1><span></span></header>
+    <div class="costmon"><button class="link" id="costPrev" aria-label="前の月">‹</button><b id="costTitle"></b><button class="link" id="costNext" aria-label="次の月">›</button></div>
+    <div id="costTable"></div>
+    <div id="costMore"></div>
+    <div class="usage-box">
+      <div id="usageDetail" class="cost"></div>
+      <button id="exportCsv">1回ごとの記録をCSVで書き出す(Excel・Numbers用)</button>
+      <p class="muted">すべての端末の合計。1ドル150円で計算した目安です。話した内容は記録しません(字数・長さ・金額だけ)。</p>
+    </div>
+  </div>
+
   <!-- ⚙ 設定 -->
   <div id="pageSet" hidden class="set">
     <header><button class="link back" data-back="pageHome" id="setBack">‹ ホーム</button><h1>設定</h1><span></span></header>
@@ -471,14 +491,7 @@
     <p class="muted">保存したものは5分で話す画面から片付けます(記録には残っています)。録音中・まとめ中は消しません。</p>
     <p class="muted">この端末の中だけに保存します。</p>
     <div class="row-btns"><button class="main" id="saveSettings">保存</button></div>
-    <div class="usage-box">
-      <b>使った金額と記録(すべての端末の合計)</b>
-      <div id="usageDetail" class="cost"></div>
-      <h4>月ごと</h4>
-      <div id="usageMonths"></div>
-      <button id="exportCsv">1回ごとの記録をCSVで書き出す(Excel・Numbers用)</button>
-      <p class="muted">話した内容は記録しません(字数・長さ・金額だけ)。</p>
-    </div>
+    <button class="costrow" id="openCost"><span>💰 かかった金額 <small id="costNow"></small></span><span class="go">›</span></button>
     <div class="usage-box">
       <b>💬 LINE(依頼の受け取り)</b>
       <div id="lineUsers"></div>
@@ -545,7 +558,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "b2994c2b2c3c12a11b194d8e2a30b7e3f60c0c25";
+const BUILD = "1e922d099fd51b7a1c869e5c5f166d87e3cbb40e";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length) return;
   try {
@@ -594,8 +607,8 @@ function md(s) {
 }
 
 // ---- ページの切り替え。一覧(pageList)と設定(pageSet)はホームから開くので、タブはホームを光らせる ----
-const TAB_OF = { pageList: "pageHome", pageSet: "pageHome", pageLeave: "pageCal", pageNote: "pageHome" };
-const PAGES = ["pageSpeak", "pageHome", "pageCal", "pageMemo", "pageMorning", "pageList", "pageSet", "pageLeave", "pageNote"];
+const TAB_OF = { pageList: "pageHome", pageSet: "pageHome", pageLeave: "pageCal", pageNote: "pageHome", pageCost: "pageHome" };
+const PAGES = ["pageSpeak", "pageHome", "pageCal", "pageMemo", "pageMorning", "pageList", "pageSet", "pageLeave", "pageNote", "pageCost"];
 // 一覧・設定を開いたら履歴を1つ積む。Safari の「戻る」スライドや、下の左端スライドで戻れるようにするため
 let subOpen = false, curPage = "pageSpeak";
 function showPage(page, fromPop = false) {
@@ -616,11 +629,16 @@ function showPage(page, fromPop = false) {
   if (page === "pageMorning") { loadReport(); loadWeather(); loadLeave(); }
   if (page === "pageSet") { $("pass").value = settings.pass || ""; $("api").value = settings.api || ""; $("device").value = settings.device || ""; $("clearMin").value = String(settings.clearMin ?? 60); $("aiModel").value = settings.model || "opus"; loadUsage(); loadTrash(); loadLineUsers(); }
   if (page === "pageSpeak") requestAnimationFrame(growAll);
+  if (page === "pageCost") { TAB_OF.pageCost = TAB_OF.pageSet; renderCost(); }
 }
 for (const b of document.querySelectorAll("nav.tabs button")) b.onclick = () => showPage(b.dataset.page);
 for (const b of document.querySelectorAll("[data-back]")) b.onclick = goBack;
-function goBack() { if (subOpen) history.back(); else showPage(TAB_OF[curPage] || "pageHome"); }
-window.addEventListener("popstate", () => { if (subOpen) { subOpen = false; showPage(TAB_OF[curPage] || "pageHome", true); } });
+// かかった金額は設定の中のページなので、戻ると設定へ(積んだ履歴はそのまま)
+function goBack() { if (curPage === "pageCost") showPage("pageSet"); else if (subOpen) history.back(); else showPage(TAB_OF[curPage] || "pageHome"); }
+window.addEventListener("popstate", () => {
+  if (curPage === "pageCost") { history.pushState({ sub: "pageSet" }, ""); showPage("pageSet", true); return; }
+  if (subOpen) { subOpen = false; showPage(TAB_OF[curPage] || "pageHome", true); }
+});
 
 // 画面の端から払って移る。画面が指についてくる
 //  ・タブの画面:左端から右へ→左隣のタブ(ホーム→話す)、右端から左へ→右隣のタブ(ホーム→カレンダー)。両端はつながっている(朝→話す、話す→朝)
@@ -2067,19 +2085,11 @@ const yenText = (v) => `約${v < 100 ? v.toFixed(1) : Math.round(v).toLocaleStri
 const dateText = (iso) => { const d = new Date(iso); return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`; };
 const durText = (sec) => { const m = Math.round(sec / 60); return m < 1 ? `${Math.round(sec)}秒` : m < 60 ? `${m}分` : `${Math.floor(m / 60)}時間${m % 60}分`; };
 const n = (v) => (v || 0).toLocaleString();
-function usageRows(t) {
-  return `<div><span>まとめ(Claude)${n(t.claudeCount)}回</span><span>${yenText(t.claudeYen)}</span></div>` +
-    `<div><span>文字起こし(OpenAI)${durText(t.openaiSec)}</span><span>${yenText(t.openaiYen)}</span></div>` +
-    `<div><span>録音</span><span>${n(t.recCount)}回・${durText(t.openaiSec)}・${n(t.recChars)}字</span></div>` +
-    `<div><span>保存</span><span>${n(t.saveCount)}件・${n(t.saveChars)}字</span></div>`;
-}
 // 日ごと・端末ごと(1回ごとの記録から。月を開くと見える)
 let usageStats = null;
 const WD = "日月火水木金土";
-function statRow(t) {
-  const parts = [t.summaries && `まとめ${t.summaries}`, t.recs && `録音${t.recs}`, t.saves && `保存${t.saves}`, t.triages && `棚卸し${t.triages}`].filter(Boolean);
-  return (parts.join("・") || "-") + (t.beforeYen ? "＋記録前の分" : "");
-}
+// 日ごと・端末ごとは金額だけ(機能ごとの内訳は上の表)
+const statRow = (t) => (t.beforeYen ? "記録前の分を含む" : "");
 function monthDetail(k) {
   if (!usageStats) return "";
   const devs = usageStats.devices.filter((d) => d.month === k), days = usageStats.days.filter((d) => d.key.startsWith(k));
@@ -2092,18 +2102,46 @@ function monthDetail(k) {
   }).join("");
   return `<details><summary>端末ごと・日ごと</summary>${h}</details>`;
 }
-function renderUsage(u) {
-  if (!u) { $("usageDetail").textContent = "まだ記録がありません"; $("usageMonths").textContent = ""; return; }
-  const total = u.claudeYen + u.openaiYen;
-  $("usageDetail").innerHTML = usageRows(u) +
-    `<div class="sum"><span>これまでの合計</span><span>${yenText(total)}</span></div>` +
-    `<div class="note">${dateText(u.since)}から(1ドル150円で計算した目安)</div>`;
-  $("usageMonths").innerHTML = Object.keys(u.months || {}).sort().reverse().map((k) => {
-    const t = u.months[k], [y, mo] = k.split("-");
-    return `<div class="month"><div class="head"><span>${y}年${Number(mo)}月</span><span>${yenText(t.claudeYen + t.openaiYen)}</span></div>${usageRows(t)}${monthDetail(k)}</div>`;
+// 💰 かかった金額:月ごとに、機能(種類)ごとの回数・1回あたり・金額。種類の名前はサーバーの COST_KINDS から。
+// 名前のない種類(新しい機能で名前を足し忘れたもの)も「その他(種類)」として出す。1つの種類で複数のモデルを使っていればモデル別に分ける
+let usageTotal = null, costMonth = "";
+const thisMonth = () => todayStr().slice(0, 7);
+const monthsOf = () => [...new Set([thisMonth(), ...(usageStats?.breakdown || []).map((r) => r.month)])].sort();
+const monthYen = (k) => (usageStats?.breakdown || []).filter((r) => r.month === k).reduce((s, r) => s + r.yen, 0);
+function costRows(k) {
+  const kinds = usageStats?.kinds || {}, rows = (usageStats?.breakdown || []).filter((r) => r.month === k);
+  const multi = (kind) => rows.filter((r) => r.kind === kind).length > 1;
+  const short = (m) => (/sonnet/i.test(m) ? "Sonnet・節約" : /opus/i.test(m) ? "Opus" : /haiku/i.test(m) ? "Haiku" : m);
+  return rows.map((r) => {
+    const k2 = kinds[r.kind] || { name: `その他(${r.kind})`, icon: "❔" };
+    const name = `${k2.icon} ${k2.name}${multi(r.kind) && r.model ? `(${short(r.model)})` : ""}`;
+    const sub = r.kind === "before" ? "" : k2.unit === "min" ? `${durText(r.sec)}・1分 ${yenText(r.sec ? (r.yen / r.sec) * 60 : 0)}` : `${n(r.n)}回・1回 ${yenText(r.yen / r.n)}`;
+    return `<tr><td>${esc(name)}${sub ? `<small>${sub}</small>` : ""}</td><td class="r">${yenText(r.yen)}</td></tr>`;
   }).join("");
 }
-async function loadUsage() { try { const d = await post("/api/usage", {}); usageStats = d.stats || null; renderUsage(d.usage); } catch { $("usageDetail").textContent = "読み込めませんでした(合言葉を確認)"; } }
+function renderCost() {
+  const ms = monthsOf();
+  if (!ms.includes(costMonth)) costMonth = thisMonth();
+  const [y, mo] = costMonth.split("-"), i = ms.indexOf(costMonth);
+  $("costTitle").textContent = `${y}年${Number(mo)}月 ${yenText(monthYen(costMonth))}`;
+  $("costPrev").disabled = i <= 0; $("costNext").disabled = i >= ms.length - 1;
+  const rows = costRows(costMonth);
+  $("costTable").innerHTML = usageStats ? (rows ? `<table class="costtbl">${rows}</table>` : `<div class="muted">この月は、お金のかかる使い方はありませんでした</div>`) : `<div class="muted">読み込み中…</div>`;
+  $("costMore").innerHTML = monthDetail(costMonth);
+  $("usageDetail").innerHTML = usageTotal ? `<div class="sum"><span>これまでの合計</span><span>${yenText(usageTotal.claudeYen + usageTotal.openaiYen)}</span></div><div class="note">${dateText(usageTotal.since)}から</div>` : "";
+}
+$("costPrev").onclick = () => { const ms = monthsOf(); costMonth = ms[Math.max(0, ms.indexOf(costMonth) - 1)]; renderCost(); };
+$("costNext").onclick = () => { const ms = monthsOf(); costMonth = ms[Math.min(ms.length - 1, ms.indexOf(costMonth) + 1)]; renderCost(); };
+$("openCost").onclick = () => { costMonth = thisMonth(); showPage("pageCost"); };
+$("costBack").onclick = goBack;
+async function loadUsage() {
+  try {
+    const d = await post("/api/usage", {});
+    usageStats = d.stats || null; usageTotal = d.usage || null;
+    $("costNow").textContent = `今月 ${yenText(monthYen(thisMonth()))}`;
+    if (curPage === "pageCost") renderCost();
+  } catch { $("costNow").textContent = "読み込めませんでした(合言葉を確認)"; }
+}
 
 // CSVの書き出し。iPhoneは共有シート(ファイルに保存・AirDrop・メール)、Macはダウンロード
 $("exportCsv").onclick = async () => {
