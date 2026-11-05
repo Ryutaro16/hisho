@@ -589,7 +589,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "8e06a910a11e9ad4ada863754255e4f5d5d3fadd";
+const BUILD = "a13dd3723eb948c31ef214f8ea44116f0d8294d7";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -1682,7 +1682,7 @@ async function loadHome() {
       (famRows.length ? `<div class="wg fam"><div class="wgt"><span>${fam.icon} ${esc(fam.title)} ${famRows.length}</span><button data-open="family">すべて ›</button></div>${famRows.map((i) => rowHtml(i, "family")).join("")}</div>` : "") +
       (h.leave?.due ? `<button class="leavedue" data-leave>🌴 今月分の有給が、まだ記録されていません(残り${fmtDays(h.leave.left)}日) ›</button>` : "") +
       `<div class="wg now"><div class="wgt"><span>⭐ 今やること</span><button data-open="todo">選ぶ ›</button></div>` +
-      (h.focus.length ? rows(h.focus) : `<div class="empty">ToDoの☆を押すと、ここに入ります(3つまで)</div>`) + `</div>` +
+      (h.focus.length ? rows(h.focus) : `<div class="empty">ToDoの☆を押すと、ここに入ります</div>`) + `</div>` +
       `<div class="wg"><div class="wgt"><span>✅ ToDo</span><button data-open="todo">すべて ${h.todos.length} ›</button></div>` +
       (soonShow.length ? `<div class="g">期限切れ・今日・明日</div>${rows(soonShow)}` : "") +
       (weekShow.length ? `<div class="g">1週間以内</div>${rows(weekShow)}` : "") +
