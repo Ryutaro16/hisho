@@ -182,7 +182,10 @@
   /* 小さなオン・オフのスイッチ */
   .aiswitch { appearance:none; -webkit-appearance:none; width:40px; height:22px; min-height:0; margin:0; padding:0; border-radius:11px; background:var(--line); position:relative; cursor:pointer; flex:none; transition:background .15s; border:none; }
   .aiswitch::after { content:""; position:absolute; left:2px; top:2px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.3); transition:left .15s; }
-  .aiswitch:checked { background:#2e8b57; }
+  .aiswitch:checked { background:#1e88ff; }
+  /* 節約モードがオンのとき:横の文字を青く太く、「まとめて仕分ける」に印 */
+  .ailine.on #aiLbl { color:#1e88ff; font-weight:700; font-size:14px; }
+  #run.eco::after { content:"💰節約"; display:inline-block; background:#fff; color:#0b6bcb; font-size:12px; font-weight:700; border-radius:8px; padding:2px 7px; margin-left:6px; vertical-align:2px; }
   .aiswitch:checked::after { left:20px; }
   .more-todo { display:block; width:100%; text-align:center; padding:10px 0 4px; font-size:15px; }
   /* 有給:押せると分かるよう、一覧の行のような横長の帯。最後の記録も見せる */
@@ -304,7 +307,7 @@
         <button id="clear">消す</button>
       </div>
       <!-- ふだんは触らない設定なので、小さめ・灰色で控えめに -->
-      <label class="ailine"><span>節約モード(Sonnet・約2円)</span><input type="checkbox" class="aiswitch" id="aiSave" role="switch"><span id="aiNote"></span></label>
+      <label class="ailine" id="aiLine"><span id="aiLbl">節約モード(Sonnet・約2円)</span><input type="checkbox" class="aiswitch" id="aiSave" role="switch"><span id="aiNote"></span></label>
     </section>
     <div id="status" role="status"></div>
 
@@ -536,7 +539,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "abdc8b6f9a98db4ef2a2584a40759edc679da84c";
+const BUILD = "b26e725a59c4465048ebdd26170bcfbb056d6f5b";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length) return;
   try {
@@ -2015,11 +2018,14 @@ async function loadWeather() { try { renderWeather((await post("/api/stats", { t
 // ---- ⚙ 設定 ----
 // 話す画面の「まとめのAI」切り替え(⚙設定と同じ値。この端末に覚える)
 // ふだんはオフ(Opus)。オンにすると Sonnet で約半額
-const AI_NOTE = { opus: "オフ=Opus(精度重視・約4〜5円)", sonnet: "オン:ときどき仕分けが粗くなります" };
+const AI_NOTE = { opus: "オフ=Opus(精度重視・約4〜5円)", sonnet: "ときどき仕分けが粗くなります" };
 function renderAiPick() {
-  const m = settings.model || "opus";
-  $("aiSave").checked = m === "sonnet";
+  const m = settings.model || "opus", eco = m === "sonnet";
+  $("aiSave").checked = eco;
   $("aiNote").textContent = AI_NOTE[m];
+  $("aiLbl").textContent = eco ? "節約モード オン" : "節約モード(Sonnet・約2円)";
+  $("aiLine").classList.toggle("on", eco);
+  $("run").classList.toggle("eco", eco);
 }
 $("aiSave").onchange = () => {
   settings = { ...settings, model: $("aiSave").checked ? "sonnet" : "opus" };
