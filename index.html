@@ -71,8 +71,9 @@
   .searchbox { position:relative; margin-bottom:8px; }
   .askbox { display:flex; gap:6px; } .askbox input { flex:1; min-width:0; margin:0; } .askbox button { flex:none; }
   .asknote { font-size:12px; margin:4px 2px 8px; }
-  #askAns { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--acc); border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:15px; line-height:1.5; }
-  #askAns .lrow { padding-left:0; padding-right:0; }
+  #askAns, .askans { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--acc); border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:15px; line-height:1.5; }
+  #askAns .lrow, .askans .lrow { padding-left:0; padding-right:0; }
+  .askans .src { font-size:12px; color:var(--sub); margin-top:8px; }
   .askhead { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:12px; color:var(--sub); margin-bottom:6px; }
   .askhead button { min-height:30px; padding:2px 4px; font-size:14px; flex:none; }
   .searchbox input::-webkit-search-cancel-button { display:none; }
@@ -433,6 +434,9 @@
     <header><h1>メモ</h1></header>
     <div class="searchbox"><input id="memoSearch" type="search" placeholder="🔍 メモを検索"></div>
     <div class="searchbar" id="memoSearchBar" hidden><span id="memoSearchInfo"></span><button id="memoSearchClear">✕ 検索を解除</button></div>
+    <div class="askbox"><input id="maskQ" placeholder="🤖 秘書に聞く(例:税理士さんと何を話した?)" enterkeyhint="send"><button id="maskBtn">聞く</button></div>
+    <div class="muted asknote">今までのメモから、AIが関係のあるものを探して答えます(1回 約1〜3円)</div>
+    <div id="maskAns" class="askans" hidden></div>
     <div id="memoList"></div>
   </div>
 
@@ -541,7 +545,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "776c7df88b7c0c392fb16e151054c14f75abf9bd";
+const BUILD = "b2994c2b2c3c12a11b194d8e2a30b7e3f60c0c25";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length) return;
   try {
@@ -1331,6 +1335,26 @@ function markHits(root, words = searchWords()) {
   for (const d of root.querySelectorAll("details")) if (d.querySelector("mark.hit")) d.open = true;
 }
 $("memoList").addEventListener("click", (e) => { const r = e.target.closest(".lrow[data-memo]"); if (r) openMemo(r.dataset.memo); });
+// 📝 秘書に聞く(メモ):AIが検索の言葉を考え、見つかったメモだけで答える。もとにしたメモを押すと開く
+async function askMemo() {
+  const question = $("maskQ").value.trim();
+  if (!question) { $("maskQ").focus(); return; }
+  $("maskBtn").disabled = true; $("maskAns").hidden = false; $("maskAns").textContent = "メモを探しています…";
+  try {
+    const { result: r, yen, sec } = await post("/api/askmemo", { question, today: todayStr() });
+    const when = (iso) => { const d = new Date(iso); return md(ymd(d)); };
+    $("maskAns").innerHTML = `<div class="askhead"><span>🤖 秘書の答え・${yenText(yen || 0)}・${Math.round(sec || 0)}秒</span><button class="link" id="maskClose">✕ 閉じる</button></div><div>${esc(r.answer)}</div>` +
+      (r.memos.length ? `<div class="src">もとにしたメモ</div>` + r.memos.map((m) => `<div class="lrow" data-memo="${m.id}"><div class="tx"><span>${esc(m.title)}</span><small>${when(m.memo_at)}</small></div></div>`).join("") : "") +
+      `<div class="src">探した言葉:${esc(r.words.join("・"))}${r.from || r.to ? `(${r.from ? md(r.from) : ""}〜${r.to ? md(r.to) : ""})` : ""}・見つかったメモ ${r.found}件</div>`;
+  } catch (e) { $("maskAns").textContent = e.message; }
+  $("maskBtn").disabled = false;
+}
+$("maskBtn").onclick = askMemo;
+$("maskQ").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) askMemo(); });
+$("maskAns").addEventListener("click", (e) => {
+  if (e.target.closest("#maskClose")) { $("maskAns").hidden = true; $("maskAns").innerHTML = ""; $("maskQ").value = ""; return; }
+  const r = e.target.closest(".lrow[data-memo]"); if (r) openMemo(r.dataset.memo);
+});
 async function openMemo(id) {
   try {
     const { memo: m, items } = await post("/api/memo", { id });
