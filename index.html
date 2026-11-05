@@ -75,6 +75,9 @@
   .askbox .askmic { position:absolute; right:3px; top:50%; transform:translateY(-50%); width:40px; min-height:36px; height:36px; padding:0; border:none; background:none; font-size:20px; border-radius:50%; }
   .askbox .askmic.on { background:#e5484d; color:#fff; font-size:14px; }
   .micnote { font-size:12px; margin:4px 2px 0; }
+  .histbtn { display:block; margin:0 0 8px 2px; min-height:32px; padding:2px 0; font-size:14px; }
+  .atag { display:inline-block; background:var(--acc); color:#fff; border-radius:6px; font-size:11px; padding:1px 6px; margin-right:6px; vertical-align:2px; font-weight:700; }
+  .mdrefs .lrow { padding-left:0; padding-right:0; }
   .asknote { font-size:12px; margin:4px 2px 8px; }
   #askAns, .askans { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--acc); border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:15px; line-height:1.5; }
   #askAns .lrow, .askans .lrow { padding-left:0; padding-right:0; }
@@ -449,6 +452,7 @@
     <div class="askbox"><span class="askin"><input id="maskQ" placeholder="🤖 秘書に聞く(例:税理士さんと何を話した?)" enterkeyhint="send"><button class="askmic" data-for="maskQ" aria-label="声で入れる">🎙</button></span><button id="maskBtn">聞く</button></div>
     <div class="muted micnote" id="maskQNote" hidden></div>
     <div class="muted asknote">今までのメモから、AIが関係のあるものを探して答えます(1回 約1〜3円)</div>
+    <button class="link histbtn" data-hist="askmemo">🕘 前に聞いたこと ›</button>
     <div id="maskAns" class="askans" hidden></div>
     <div id="memoList"></div>
   </div>
@@ -462,10 +466,19 @@
       <div class="askbox"><span class="askin"><input id="askQ" placeholder="🤖 秘書に聞く(例:タイヤのこと何か言ってた?)" enterkeyhint="send"><button class="askmic" data-for="askQ" aria-label="声で入れる">🎙</button></span><button id="askBtn">聞く</button></div>
       <div class="muted micnote" id="askQNote" hidden></div>
       <div class="muted asknote">言葉がうろ覚えでも、AIが意味の近いものを探します(1回 約1〜3円)</div>
+      <button class="link histbtn" data-hist="ask">🕘 前に聞いたこと ›</button>
       <div id="askAns" hidden></div>
     </div>
     <label class="muted showdone"><input type="checkbox" id="showDone"> <span id="showDoneLbl">完了したものも見る</span></label>
     <div id="list"></div>
+  </div>
+
+  <!-- 🕘 前に聞いたこと(秘書の答えの履歴。メモ・覚えておくことの「秘書に聞く」から) -->
+  <div id="pageAsks" hidden>
+    <header><button class="link back" id="asksBack">‹ 戻る</button><h1>前に聞いたこと</h1><span></span></header>
+    <div class="chips" id="askChips"><button data-k="">すべて</button><button data-k="askmemo">📝 メモ</button><button data-k="ask">🧠 覚えておく</button></div>
+    <div class="searchbox"><input id="asksSearch" type="search" placeholder="🔍 質問・答えを検索"></div>
+    <div id="asksList"></div>
   </div>
 
   <!-- 💰 かかった金額(⚙設定から。機能ごとの内訳) -->
@@ -555,7 +568,7 @@
   <h3 id="mdTitle"></h3>
   <div class="muted" id="mdDate"></div>
   <div id="mdBody"></div>
-  <div class="row-btns"><button class="main" id="mdCopy">📋 コピー</button><button id="mdClose">閉じる</button></div>
+  <div class="row-btns"><button class="main" id="mdCopy">📋 コピー</button><button id="mdClose">閉じる</button><button class="danger" id="mdDel" hidden>削除</button></div>
 </dialog>
 
 <div id="toast"></div>
@@ -565,7 +578,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "979893c5116736c2a8118ec67b1aca8058739cb7";
+const BUILD = "d14165d40eafd953db997a42e517643ba55a19cf";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -614,8 +627,10 @@ function md(s) {
 }
 
 // ---- ページの切り替え。一覧(pageList)と設定(pageSet)はホームから開くので、タブはホームを光らせる ----
-const TAB_OF = { pageList: "pageHome", pageSet: "pageHome", pageLeave: "pageCal", pageNote: "pageHome", pageCost: "pageHome" };
-const PAGES = ["pageSpeak", "pageHome", "pageCal", "pageMemo", "pageMorning", "pageList", "pageSet", "pageLeave", "pageNote", "pageCost"];
+const TAB_OF = { pageList: "pageHome", pageSet: "pageHome", pageLeave: "pageCal", pageNote: "pageHome", pageCost: "pageHome", pageAsks: "pageMemo" };
+const PAGES = ["pageSpeak", "pageHome", "pageCal", "pageMemo", "pageMorning", "pageList", "pageSet", "pageLeave", "pageNote", "pageCost", "pageAsks"];
+// 設定や一覧の中から開くページ(戻ると、その親のページへ。積んだ履歴はそのまま)
+const PARENT = { pageCost: "pageSet" };
 // 一覧・設定を開いたら履歴を1つ積む。Safari の「戻る」スライドや、下の左端スライドで戻れるようにするため
 let subOpen = false, curPage = "pageSpeak";
 function showPage(page, fromPop = false) {
@@ -637,13 +652,13 @@ function showPage(page, fromPop = false) {
   if (page === "pageSet") { $("pass").value = settings.pass || ""; $("api").value = settings.api || ""; $("device").value = settings.device || ""; $("clearMin").value = String(settings.clearMin ?? 60); $("aiModel").value = settings.model || "opus"; loadUsage(); loadTrash(); loadLineUsers(); }
   if (page === "pageSpeak") requestAnimationFrame(growAll);
   if (page === "pageCost") { TAB_OF.pageCost = TAB_OF.pageSet; renderCost(); }
+  if (page === "pageAsks") loadAsks();
 }
 for (const b of document.querySelectorAll("nav.tabs button")) b.onclick = () => showPage(b.dataset.page);
 for (const b of document.querySelectorAll("[data-back]")) b.onclick = goBack;
-// かかった金額は設定の中のページなので、戻ると設定へ(積んだ履歴はそのまま)
-function goBack() { if (curPage === "pageCost") showPage("pageSet"); else if (subOpen) history.back(); else showPage(TAB_OF[curPage] || "pageHome"); }
+function goBack() { if (PARENT[curPage]) showPage(PARENT[curPage]); else if (subOpen) history.back(); else showPage(TAB_OF[curPage] || "pageHome"); }
 window.addEventListener("popstate", () => {
-  if (curPage === "pageCost") { history.pushState({ sub: "pageSet" }, ""); showPage("pageSet", true); return; }
+  if (PARENT[curPage]) { history.pushState({ sub: PARENT[curPage] }, ""); showPage(PARENT[curPage], true); return; }
   if (subOpen) { subOpen = false; showPage(TAB_OF[curPage] || "pageHome", true); }
 });
 
@@ -1332,7 +1347,8 @@ async function loadMemos() {
       // 検索中で、題と要点に言葉がないときは、本文・話した言葉の見つかったところを出す
       const words = searchWords(), shown = m.title + (sum[0] || "");
       const line = words.length && m.snippet && !words.some((w) => shown.includes(w)) ? m.snippet : sum[0] || "";
-      html += `<div class="lrow" data-memo="${m.id}"><div class="tx"><span>${esc(m.title)}</span><small>${md(ymd(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}${line ? "・" + esc(line) : ""}${m.source === "notion" ? "・Notionから" : ""}</small></div></div>`;
+      const isAsk = ASK_KIND[m.source], ln = isAsk && !(words.length && m.snippet) ? m.preview || "" : line;
+      html += `<div class="lrow" data-memo="${m.id}"><div class="tx"><span>${isAsk ? `<span class="atag">🤖 秘書の答え</span>` : ""}${esc(m.title)}</span><small>${md(ymd(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}${ln ? "・" + esc(ln) : ""}${m.source === "notion" ? "・Notionから" : ""}</small></div></div>`;
     }
     $("memoList").innerHTML = html || `<div class="soon">${q ? "見つかりませんでした" : "まだメモがありません"}</div>`;
     markHits($("memoList"));
@@ -1436,12 +1452,53 @@ $("maskAns").addEventListener("click", (e) => {
   if (e.target.closest("#maskClose")) { $("maskAns").hidden = true; $("maskAns").innerHTML = ""; $("maskQ").value = ""; micNote("maskQ", ""); return; }
   const r = e.target.closest(".lrow[data-memo]"); if (r) openMemo(r.dataset.memo);
 });
+// 🕘 前に聞いたこと(秘書の答えの履歴)。答えは📝メモにも「🤖 秘書の答え」として並ぶ
+const ASK_KIND = { askmemo: "📝 メモ", ask: "🧠 覚えておく" };
+let asksCache = [], asksKind = "";
+async function loadAsks() {
+  for (const b of $("askChips").children) b.classList.toggle("on", b.dataset.k === asksKind);
+  if (!asksCache.length) $("asksList").innerHTML = `<div class="muted">読み込み中…</div>`;
+  try { asksCache = (await post("/api/asks", {})).asks; renderAsks(); } catch (e) { $("asksList").innerHTML = `<div class="soon">${esc(e.message)}</div>`; }
+}
+function renderAsks() {
+  const words = $("asksSearch").value.trim().split(/\s+/).filter(Boolean);
+  const rows = asksCache.filter((a) => (!asksKind || a.kind === asksKind) && words.every((w) => (a.title + "\n" + a.body).includes(w)));
+  $("asksList").innerHTML = rows.map((a) => {
+    const d = new Date(a.memo_at), body = a.body.length > 90 ? a.body.slice(0, 90) + "…" : a.body;
+    return `<div class="lrow" data-memo="${a.id}"><div class="tx"><span>${esc(a.title)}</span><small>${md(ymd(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}・${ASK_KIND[a.kind] || ""}・${esc(body)}</small></div></div>`;
+  }).join("") || `<div class="soon">${asksCache.length ? "見つかりませんでした" : "まだありません。「秘書に聞く」で聞くと、答えがここにたまります"}</div>`;
+  if (words.length) markHits($("asksList"), words);
+}
+$("askChips").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { asksKind = b.dataset.k; loadAsks(); } });
+$("asksSearch").addEventListener("input", renderAsks);
+$("asksList").addEventListener("click", (e) => { const r = e.target.closest(".lrow[data-memo]"); if (r) openMemo(r.dataset.memo); });
+for (const b of document.querySelectorAll(".histbtn")) b.onclick = () => {
+  asksKind = b.dataset.hist; $("asksSearch").value = "";
+  // 覚えておくこと(一覧の中)から開いたら一覧へ、メモから開いたらメモへ戻る
+  if (curPage === "pageList") { PARENT.pageAsks = "pageList"; TAB_OF.pageAsks = "pageHome"; } else { delete PARENT.pageAsks; TAB_OF.pageAsks = "pageMemo"; }
+  showPage("pageAsks");
+};
+$("asksBack").onclick = goBack;
+let mdMemo = null;
 async function openMemo(id) {
   try {
-    const { memo: m, items } = await post("/api/memo", { id });
+    const { memo: m, items, ask } = await post("/api/memo", { id });
+    mdMemo = m;
     const d = new Date(m.memo_at);
     $("mdTitle").textContent = m.title;
     $("mdDate").textContent = `${md(ymd(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    $("mdDel").hidden = !ask;
+    if (ask) {
+      // 秘書の答え:質問・答え・もとにしたもの(メモなら押すと開く)
+      $("mdDate").textContent += `・🤖 秘書の答え(${ASK_KIND[ask.kind] || ""}・${yenText(ask.yen)})`;
+      $("mdBody").innerHTML = `<div class="lbl">聞いたこと</div><div class="memo-body">${esc(m.said)}</div><div class="lbl">秘書の答え</div><div class="memo-body">${esc(m.body)}</div>` +
+        (ask.refs.length ? `<div class="lbl">もとにした${ask.kind === "askmemo" ? "メモ" : "覚えておくこと"}</div><div class="mdrefs">${ask.refs.map((r) => ask.kind === "askmemo"
+          ? `<div class="lrow" data-ref="${r.id}"><div class="tx"><span>${esc(r.title)}</span><small>${md(ymd(new Date(r.memo_at)))}</small></div></div>`
+          : `<div class="lrow"><div class="tx"><span>${esc(r.title)}</span><small>${md(r.item_date)}${r.status === "完了" ? "・しまった" : ""}</small></div></div>`).join("")}</div>` : "");
+      memoCopyText = `${m.said}\n\n${m.body}`;
+      if (!$("memoDlg").open) $("memoDlg").showModal();
+      return;
+    }
     const sum = JSON.parse(m.summary || "[]");
     $("mdBody").innerHTML = (sum.length ? `<div class="lbl">要点</div><ul>${sum.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "") +
       `<div class="lbl">本文</div><div class="memo-body">${esc(m.body).replace(/〘([^〘〙\n]*)〙/g, '<mark class="guess">$1</mark>')}</div>` +
@@ -1450,11 +1507,21 @@ async function openMemo(id) {
     // コピーするのは、人に送れる形の「題・要点・本文」(仕分けた項目と話し言葉は入れない。〘〙の印は外す)
     memoCopyText = [m.title, sum.length ? sum.map((x) => "・" + x).join("\n") : "", String(m.body || "").replace(/[〘〙]/g, "")].filter(Boolean).join("\n\n");
     markHits($("memoDlg"));
-    $("memoDlg").showModal();
+    if (!$("memoDlg").open) $("memoDlg").showModal();
   } catch (e) { alert(e.message); }
 }
 let memoCopyText = "";
 $("mdClose").onclick = () => $("memoDlg").close();
+// 秘書の答えの「もとにしたメモ」を押すと、そのメモに切り替える
+$("mdBody").addEventListener("click", (e) => { const r = e.target.closest(".lrow[data-ref]"); if (r) openMemo(r.dataset.ref); });
+$("mdDel").onclick = async () => {
+  if (!mdMemo || !confirm(`この秘書の答えを削除します。(30日間は⚙設定のゴミ箱から戻せます)`)) return;
+  try {
+    await post("/api/asks", { action: "delete", id: mdMemo.id });
+    $("memoDlg").close(); toast("削除しました");
+    if (curPage === "pageAsks") loadAsks(); else if (curPage === "pageMemo") loadMemos();
+  } catch (e) { alert(e.message); }
+};
 
 // ---- 小窓(dialog)共通 ----
 // 開いている間は後ろの画面がスクロールしないよう止め、閉じたら元の位置に戻す
