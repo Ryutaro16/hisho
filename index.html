@@ -565,7 +565,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "8e3eccd9e2f22cd8c38309403ad30ea5115e3a87";
+const BUILD = "979893c5116736c2a8118ec67b1aca8058739cb7";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -1371,12 +1371,13 @@ function micDone() { if (micNow) { micNow.btn.classList.remove("on"); micNow.btn
 function micBySpeech(btn, id) {
   const r = new SR(); let got = "", fellBack = false;
   r.lang = "ja-JP"; r.interimResults = true; r.continuous = false;
-  r.onresult = (e) => { got = [...e.results].map((x) => x[0].transcript).join(""); $(id).value = got; };
+  // iPhone では、聞き終わってもマイクを使ったまま(左上のオレンジ)になることがあるので、言い終わったら自分で止め、終わったら abort で手放す
+  r.onresult = (e) => { got = [...e.results].map((x) => x[0].transcript).join(""); $(id).value = got; if (e.results[e.results.length - 1].isFinal) { try { r.stop(); } catch {} } };
   r.onerror = (e) => {
     if (got || e.error === "no-speech" || e.error === "aborted") return;
     fellBack = true; micDone(); micByRecording(btn, id); // 音声認識が使えない → 録音して文字起こし
   };
-  r.onend = () => { if (fellBack) return; micDone(); micNote(id, got ? "" : "聞き取れませんでした。もう一度🎙を押してください"); };
+  r.onend = () => { try { r.abort(); } catch {} if (fellBack) return; micDone(); micNote(id, got ? "" : "聞き取れませんでした。もう一度🎙を押してください"); };
   micNow = { btn, stop: () => r.stop() };
   btn.classList.add("on"); btn.textContent = "■"; micNote(id, "聞いています…(話し終わると止まります)");
   try { r.start(); } catch { fellBack = true; micDone(); micByRecording(btn, id); }
