@@ -73,6 +73,8 @@
   .asknote { font-size:12px; margin:4px 2px 8px; }
   #askAns { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--acc); border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:15px; line-height:1.5; }
   #askAns .lrow { padding-left:0; padding-right:0; }
+  .askhead { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:12px; color:var(--sub); margin-bottom:6px; }
+  .askhead button { min-height:30px; padding:2px 4px; font-size:14px; flex:none; }
   .searchbox input::-webkit-search-cancel-button { display:none; }
   /* 検索中の帯:何の言葉で何件か+解除 */
   .searchbar { display:flex; align-items:center; justify-content:space-between; gap:8px; background:#fff4e5; color:#1f2933; border:1px solid #f0b429; border-radius:10px; padding:6px 6px 6px 12px; margin-bottom:10px; font-size:14px; }
@@ -539,7 +541,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "b26e725a59c4465048ebdd26170bcfbb056d6f5b";
+const BUILD = "776c7df88b7c0c392fb16e151054c14f75abf9bd";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length) return;
   try {
@@ -1211,15 +1213,17 @@ async function askSecretary() {
   if (!question) { $("askQ").focus(); return; }
   $("askBtn").disabled = true; $("askAns").hidden = false; $("askAns").textContent = "探しています…";
   try {
-    const { result } = await post("/api/ask", { question, today: todayStr() });
-    $("askAns").innerHTML = `<div>${esc(result.answer)}</div>` + result.items.map((i) => rowHtml(i)).join("");
+    const { result, yen, sec } = await post("/api/ask", { question, today: todayStr() });
+    $("askAns").innerHTML = `<div class="askhead"><span>🤖 秘書の答え・${yenText(yen || 0)}・${Math.round(sec || 0)}秒</span><button class="link" id="askClose">✕ 閉じる</button></div><div>${esc(result.answer)}</div>` + result.items.map((i) => rowHtml(i)).join("");
     for (const i of result.items) if (!listItemsCache.some((x) => x.id === i.id)) listItemsCache.push(i);
   } catch (e) { $("askAns").textContent = e.message; }
   $("askBtn").disabled = false;
 }
 $("askBtn").onclick = askSecretary;
 $("askQ").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) askSecretary(); });
+// 閉じる:答えと質問の欄を空に戻す
 $("askAns").addEventListener("click", (e) => {
+  if (e.target.closest("#askClose")) { $("askAns").hidden = true; $("askAns").innerHTML = ""; $("askQ").value = ""; return; }
   const tx = e.target.closest(".tx");
   if (tx) openItem(listItemsCache.find((i) => String(i.id) === tx.closest(".lrow").dataset.id));
 });
