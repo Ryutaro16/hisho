@@ -589,7 +589,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "c15696a878708db3bfa405db4ca541f6fd92d1eb";
+const BUILD = "47bca3d0178f06bc357f2474dc77a76cbb8ea53e";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -983,7 +983,7 @@ setInterval(autoClear, 30e3);
 const SEGMENT_MS = 60 * 1000;
 let recording = false, stream = null, recorder = null, segTimer = null, clock = null, wakeLock = null, recStart = 0;
 let queue = [], failed = [], sending = false, doneCount = 0;
-let waitLast = false, lastStopped = false, lenAtStart = 0;
+let waitLast = false, lastStopped = false, lenAtStart = 0, micName = "";
 let firstSeg = false;
 
 function pickType() {
@@ -1006,6 +1006,7 @@ function paintTiles() {
 function recInfo() {
   paintTiles();
   const parts = [];
+  if (recording && micName) parts.push(`🎙 マイク:${micName}`);
   if (doneCount) parts.push(`文字にした区切り ${doneCount}本`);
   if (sending || queue.length || (waitLast && !lastStopped)) parts.push("文字起こし中…");
   if (failed.length) parts.push(`失敗 ${failed.length}本`);
@@ -1128,6 +1129,8 @@ async function startRecording() {
   noSoundShown = false;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
   catch { setStatus("マイクを使えませんでした。マイクの使用を許可してください", "err"); return; }
+  // 使っているマイクの名前(Bluetoothイヤホンがつながっていると、iPhone はイヤホンのマイクに切り替えることがある)
+  micName = stream.getAudioTracks()[0]?.label || "";
   recording = true; recStart = Date.now(); waitLast = false; lastStopped = false; lenAtStart = draft.input.length; firstSeg = true;
   if (!draft.startedAt) { draft.startedAt = recStart; saveDraft(); }
   setStatus("録音中…(黙っていても止まりません)。話し終わったら「■ 止める」"); render();
