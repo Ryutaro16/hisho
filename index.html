@@ -71,7 +71,9 @@
   .searchbox { position:relative; margin-bottom:8px; }
   .askbox { display:flex; gap:6px; } .askbox input { flex:1; min-width:0; margin:0; } .askbox button { flex:none; }
   /* 欄の中の🎙(写真アプリの検索欄のように右端に) */
-  .askin { position:relative; flex:1; min-width:0; display:flex; } .askin input { padding-right:46px; }
+  .askin { position:relative; flex:1; min-width:0; display:flex; } .askin input { padding-right:82px; }
+  /* 入れた文字を1回で消す✕(文字があるときだけ。🎙の左) */
+  .askbox .askclr { position:absolute; right:44px; top:50%; transform:translateY(-50%); width:30px; height:30px; min-height:0; padding:0; border:none; border-radius:50%; background:var(--line); color:var(--sub); font-size:14px; line-height:30px; }
   .askbox .askmic { position:absolute; right:3px; top:50%; transform:translateY(-50%); width:40px; min-height:36px; height:36px; padding:0; border:none; background:none; font-size:20px; border-radius:50%; }
   .askbox .askmic.on { background:#e5484d; color:#fff; font-size:14px; }
   .micnote { font-size:12px; margin:4px 2px 0; }
@@ -449,7 +451,7 @@
     <header><h1>メモ</h1></header>
     <div class="searchbox"><input id="memoSearch" type="search" placeholder="🔍 メモを検索"></div>
     <div class="searchbar" id="memoSearchBar" hidden><span id="memoSearchInfo"></span><button id="memoSearchClear">✕ 検索を解除</button></div>
-    <div class="askbox"><span class="askin"><input id="maskQ" placeholder="🤖 秘書に聞く(例:税理士さんと何を話した?)" enterkeyhint="send"><button class="askmic" data-for="maskQ" aria-label="声で入れる">🎙</button></span><button id="maskBtn">聞く</button></div>
+    <div class="askbox"><span class="askin"><input id="maskQ" placeholder="🤖 秘書に聞く(例:税理士さんと何を話した?)" enterkeyhint="send"><button class="askclr" data-for="maskQ" aria-label="消す" hidden>✕</button><button class="askmic" data-for="maskQ" aria-label="声で入れる">🎙</button></span><button id="maskBtn">聞く</button></div>
     <div class="muted micnote" id="maskQNote" hidden></div>
     <div class="muted asknote">今までのメモから、AIが関係のあるものを探して答えます(1回 約1〜3円)</div>
     <button class="link histbtn" data-hist="askmemo">🕘 前に聞いたこと ›</button>
@@ -463,7 +465,7 @@
     <div class="chips" id="chips"></div>
     <div id="remBox" hidden>
       <div class="searchbox"><input id="remSearch" type="search" placeholder="🔍 覚えておくことを検索"></div>
-      <div class="askbox"><span class="askin"><input id="askQ" placeholder="🤖 秘書に聞く(例:タイヤのこと何か言ってた?)" enterkeyhint="send"><button class="askmic" data-for="askQ" aria-label="声で入れる">🎙</button></span><button id="askBtn">聞く</button></div>
+      <div class="askbox"><span class="askin"><input id="askQ" placeholder="🤖 秘書に聞く(例:タイヤのこと何か言ってた?)" enterkeyhint="send"><button class="askclr" data-for="askQ" aria-label="消す" hidden>✕</button><button class="askmic" data-for="askQ" aria-label="声で入れる">🎙</button></span><button id="askBtn">聞く</button></div>
       <div class="muted micnote" id="askQNote" hidden></div>
       <div class="muted asknote">言葉がうろ覚えでも、AIが意味の近いものを探します(1回 約1〜3円)</div>
       <button class="link histbtn" data-hist="ask">🕘 前に聞いたこと ›</button>
@@ -578,7 +580,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "d14165d40eafd953db997a42e517643ba55a19cf";
+const BUILD = "55aa754fd793a7fc88f2c27f5a525fc9f9c4092a";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -1267,7 +1269,7 @@ $("askBtn").onclick = askSecretary;
 $("askQ").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) askSecretary(); });
 // 閉じる:答えと質問の欄を空に戻す
 $("askAns").addEventListener("click", (e) => {
-  if (e.target.closest("#askClose")) { $("askAns").hidden = true; $("askAns").innerHTML = ""; $("askQ").value = ""; micNote("askQ", ""); return; }
+  if (e.target.closest("#askClose")) { $("askAns").hidden = true; $("askAns").innerHTML = ""; $("askQ").value = ""; syncClr("askQ"); micNote("askQ", ""); return; }
   const tx = e.target.closest(".tx");
   if (tx) openItem(listItemsCache.find((i) => String(i.id) === tx.closest(".lrow").dataset.id));
 });
@@ -1388,7 +1390,7 @@ function micBySpeech(btn, id) {
   const r = new SR(); let got = "", fellBack = false;
   r.lang = "ja-JP"; r.interimResults = true; r.continuous = false;
   // iPhone では、聞き終わってもマイクを使ったまま(左上のオレンジ)になることがあるので、言い終わったら自分で止め、終わったら abort で手放す
-  r.onresult = (e) => { got = [...e.results].map((x) => x[0].transcript).join(""); $(id).value = got; if (e.results[e.results.length - 1].isFinal) { try { r.stop(); } catch {} } };
+  r.onresult = (e) => { got = [...e.results].map((x) => x[0].transcript).join(""); $(id).value = got; syncClr(id); if (e.results[e.results.length - 1].isFinal) { try { r.stop(); } catch {} } };
   r.onerror = (e) => {
     if (got || e.error === "no-speech" || e.error === "aborted") return;
     fellBack = true; micDone(); micByRecording(btn, id); // 音声認識が使えない → 録音して文字起こし
@@ -1416,13 +1418,20 @@ async function micByRecording(btn, id) {
       });
       const d = await res.json().catch(() => ({ error: `サーバーの応答を読めませんでした(${res.status})` }));
       if (!res.ok || d.error) throw new Error(d.error || `エラー(${res.status})`);
-      $(id).value = d.text || "";
+      $(id).value = d.text || ""; syncClr(id);
       micNote(id, d.text ? `文字起こしで聞き取りました(${yenText(d.yen || 0)})` : "聞き取れませんでした");
     } catch (e) { micNote(id, "文字にできませんでした:" + e.message); }
   };
   micNow = { btn, stop: () => rec.state === "recording" && rec.stop() };
   btn.classList.add("on"); btn.textContent = "■"; micNote(id, "録音しています。話し終わったら■を押してください");
   rec.start();
+}
+// ✕:欄の文字を1回で消す(文字があるときだけ出す。声で入れたときも)
+const syncClr = (id) => { document.querySelector(`.askclr[data-for="${id}"]`).hidden = !$(id).value; };
+for (const b of document.querySelectorAll(".askclr")) {
+  const id = b.dataset.for;
+  $(id).addEventListener("input", () => syncClr(id));
+  b.onclick = (e) => { e.preventDefault(); $(id).value = ""; syncClr(id); micNote(id, ""); $(id).focus(); };
 }
 for (const btn of document.querySelectorAll(".askmic")) {
   btn.onclick = (e) => {
@@ -1449,7 +1458,7 @@ async function askMemo() {
 $("maskBtn").onclick = askMemo;
 $("maskQ").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) askMemo(); });
 $("maskAns").addEventListener("click", (e) => {
-  if (e.target.closest("#maskClose")) { $("maskAns").hidden = true; $("maskAns").innerHTML = ""; $("maskQ").value = ""; micNote("maskQ", ""); return; }
+  if (e.target.closest("#maskClose")) { $("maskAns").hidden = true; $("maskAns").innerHTML = ""; $("maskQ").value = ""; syncClr("maskQ"); micNote("maskQ", ""); return; }
   const r = e.target.closest(".lrow[data-memo]"); if (r) openMemo(r.dataset.memo);
 });
 // 🕘 前に聞いたこと(秘書の答えの履歴)。答えは📝メモにも「🤖 秘書の答え」として並ぶ
