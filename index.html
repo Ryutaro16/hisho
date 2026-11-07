@@ -590,7 +590,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "349a3c692ff4f551068fb073fb954421df91623c";
+const BUILD = "c79005a57ae681ba6c470d382cb013b36b2945b7";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -961,7 +961,7 @@ function save() {
 function reset(auto = false) {
   if (recording) return;
   draft = emptyDraft();
-  failed = []; queue = []; doneCount = 0; $("retryBtn").hidden = true;
+  failed = []; queue = []; doneCount = 0; skipCount = 0; $("retryBtn").hidden = true;
   store.del("hisho:draft"); setStatus(""); render();
   if (!auto) input.focus(); // 自動で空にしたときはキーボードを開かない
 }
@@ -986,7 +986,7 @@ const SEGMENT_MS = 15 * 1000;
 // 音声ファイルの読み込みは急がないので1分ごと(送る回数を増やさない)
 const FILE_SEGMENT_MS = 60 * 1000;
 let recording = false, stream = null, recorder = null, segTimer = null, clock = null, wakeLock = null, recStart = 0;
-let queue = [], failed = [], sending = false, doneCount = 0;
+let queue = [], failed = [], sending = false, doneCount = 0, skipCount = 0;
 let waitLast = false, lastStopped = false, lenAtStart = 0, micName = "";
 let firstSeg = false;
 
@@ -1013,6 +1013,7 @@ function recInfo() {
   if (recording && micName) parts.push(`🎙 マイク:${micName}`);
   if (doneCount) parts.push(`文字にした区切り ${doneCount}本`);
   if (sending || queue.length || (waitLast && !lastStopped)) parts.push("文字起こし中…");
+  if (skipCount) parts.push(`音声が壊れていて飛ばした区切り ${skipCount}本`);
   if (failed.length) parts.push(`失敗 ${failed.length}本`);
   $("recStatus").textContent = parts.join("・");
 }
@@ -1135,7 +1136,7 @@ async function startRecording() {
   catch { setStatus("マイクを使えませんでした。マイクの使用を許可してください", "err"); return; }
   // 使っているマイクの名前(Bluetoothイヤホンがつながっていると、iPhone はイヤホンのマイクに切り替えることがある)
   micName = stream.getAudioTracks()[0]?.label || "";
-  recording = true; recStart = Date.now(); waitLast = false; lastStopped = false; lenAtStart = draft.input.length; firstSeg = true;
+  recording = true; recStart = Date.now(); waitLast = false; lastStopped = false; lenAtStart = draft.input.length; firstSeg = true; skipCount = 0;
   if (!draft.startedAt) { draft.startedAt = recStart; saveDraft(); }
   setStatus("録音中…(黙っていても止まりません)。話し終わったら「■ 止める」"); render();
   hiddenAt = 0; micCut = false; watchMic();
@@ -1210,22 +1211,43 @@ function srStop() {
 }
 $("srBtn").onclick = () => (srOn ? srStop() : srStart());
 
+// OpenAI が「音声が壊れている・対応していない」と断った(iPhone の録音の区切りでまれに起きる)
+const BAD_AUDIO = /corrupted|unsupported|Invalid file format|依頼に誤り/i;
+async function sendOne(blob) {
+  let data = null, err = "";
+  for (let i = 0; i < 3 && !data; i++) {
+    try {
+      const res = await fetch((settings.api || DEFAULT_API).replace(/\/$/, "") + "/api/transcribe" + (blob.rec ? "?rec=1" : ""), {
+        method: "POST", headers: { "Content-Type": blob.type.split(";")[0], "X-Passphrase": settings.pass || "", "X-Device": encodeURIComponent(settings.device || "") }, body: blob,
+      });
+      const d = await res.json().catch(() => ({ error: `サーバーの応答を読めませんでした(${res.status})` }));
+      if (!res.ok || d.error) { err = d.error || `エラー(${res.status})`; if (res.status < 500 || BAD_AUDIO.test(err)) break; }
+      else data = d;
+    } catch { err = "サーバーにつながりません"; }
+    if (!data && i < 2) await new Promise((ok) => setTimeout(ok, 1500 * (i + 1)));
+  }
+  return { data, err };
+}
+// 断られた区切りは、iPhone の中で WAV に作り直して1回だけ送り直す。読めない・ほぼ無音なら null(飛ばす)
+async function remakeWav(blob) {
+  try {
+    const buf = await new OfflineAudioContext(1, 1, 16000).decodeAudioData(await blob.arrayBuffer());
+    if (buf.duration < 0.5) return null;
+    const w = wavBlob(buf.getChannelData(0), 16000); w.rec = blob.rec;
+    return w;
+  } catch { return null; }
+}
 async function sendQueue() {
   if (sending || failed.length) return;
   sending = true; render();
   while (queue.length) {
     const blob = queue[0];
-    let data = null, err = "";
-    for (let i = 0; i < 3 && !data; i++) {
-      try {
-        const res = await fetch((settings.api || DEFAULT_API).replace(/\/$/, "") + "/api/transcribe" + (blob.rec ? "?rec=1" : ""), {
-          method: "POST", headers: { "Content-Type": blob.type.split(";")[0], "X-Passphrase": settings.pass || "", "X-Device": encodeURIComponent(settings.device || "") }, body: blob,
-        });
-        const d = await res.json().catch(() => ({ error: `サーバーの応答を読めませんでした(${res.status})` }));
-        if (!res.ok || d.error) { err = d.error || `エラー(${res.status})`; if (res.status < 500) break; }
-        else data = d;
-      } catch { err = "サーバーにつながりません"; }
-      if (!data && i < 2) await new Promise((ok) => setTimeout(ok, 1500 * (i + 1)));
+    let { data, err } = await sendOne(blob);
+    if (!data && BAD_AUDIO.test(err)) {
+      const wav = await remakeWav(blob);
+      if (wav) ({ data, err } = await sendOne(wav));
+      // 作り直してもだめなら、その区切りだけ飛ばして次へ(1つの区切りで後ろが全部止まらないように)
+      if (!data) { queue.shift(); skipCount++; recInfo(); continue; }
     }
     queue.shift();
     if (!data) { failed.push(blob, ...queue); queue = []; $("retryBtn").hidden = false; setStatus("文字起こしに失敗しました:" + err, "err"); break; }
@@ -1242,8 +1264,9 @@ $("retryBtn").onclick = () => { queue = failed.concat(queue); failed = []; $("re
 function afterRecording() {
   if (!waitLast || !lastStopped || recording || sending || queue.length || failed.length) return;
   waitLast = false; render();
-  if (draft.input.length > lenAtStart) setStatus("文字にしました。直したり続けて録音したりしてから「まとめて仕分ける」を押してください", "ok");
-  else setStatus("聞き取れませんでした。もう一度録音してください", "err");
+  const skip = skipCount ? `(音声が壊れていた区切り ${skipCount}本・約${skipCount * SEGMENT_MS / 1000}秒ぶんは文字にできませんでした)` : "";
+  if (draft.input.length > lenAtStart) setStatus("文字にしました。直したり続けて録音したりしてから「まとめて仕分ける」を押してください" + skip, skip ? "err" : "ok");
+  else setStatus("聞き取れませんでした。もう一度録音してください" + skip, "err");
 }
 
 $("run").onclick = run;
