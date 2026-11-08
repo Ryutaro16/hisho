@@ -305,6 +305,7 @@
   .month h5 { margin:8px 0 2px; font-size:13px; color:var(--ink); }
   .month div span:last-child { white-space:nowrap; }
   #exportCsv { width:100%; margin-top:10px; }
+  a.costrow { box-sizing:border-box; min-height:44px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:inherit; text-decoration:none; }
   .costrow { display:flex; justify-content:space-between; align-items:center; width:100%; text-align:left; margin-top:16px; padding:12px; font-size:16px; }
   .costrow small { color:var(--sub); font-size:13px; margin-left:4px; } .costrow .go { color:var(--sub); }
   .costmon { display:flex; justify-content:space-between; align-items:center; margin:4px 0 8px; } .costmon b { font-size:18px; } .costmon button { font-size:24px; min-height:40px; padding:0 14px; } .costmon button:disabled { opacity:.25; }
@@ -532,6 +533,7 @@
     <p class="muted">保存したものは5分で話す画面から片付けます(記録には残っています)。録音中・まとめ中は消しません。</p>
     <p class="muted">この端末の中だけに保存します。</p>
     <div class="row-btns"><button class="main" id="saveSettings">保存</button></div>
+    <a class="costrow" href="talk-test.html"><span>🚗 聞き取りの試し <small>会話型の準備・0円</small></span><span class="go">›</span></a>
     <button class="costrow" id="openCost"><span>💰 かかった金額 <small id="costNow"></small></span><span class="go">›</span></button>
     <div class="usage-box">
       <b>💬 LINE(依頼の受け取り)</b>
@@ -599,7 +601,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "9b3be8bb13f3a907596b54469a46a170eb717786";
+const BUILD = "e9c5b02686fb09c9125cecdf9c3dd514416033aa";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {

@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>聞き取りの試し</title>
+<style>
+  :root { --ink:#1f2933; --sub:#5b6773; --line:#d9dee3; --bg:#f6f7f9; --card:#fff; --acc:#0b6bcb; --ok:#1e7d4f; --ng:#c0392b; }
+  @media (prefers-color-scheme: dark) { :root { --ink:#e6e9ec; --sub:#9aa5b1; --line:#3a424a; --bg:#15191d; --card:#1f252b; --acc:#3d8fe0; --ok:#5cc98f; --ng:#ff7b6b; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,"Hiragino Sans",sans-serif; font-size:16px; padding:calc(env(safe-area-inset-top) + 8px) 16px calc(env(safe-area-inset-bottom) + 16px); }
+  header { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  header a { color:var(--acc); text-decoration:none; font-size:16px; }
+  h1 { font-size:20px; margin:0; }
+  .muted { color:var(--sub); font-size:13px; line-height:1.5; margin:4px 0 10px; }
+  button { font:inherit; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--ink); padding:10px 14px; }
+  #go { width:100%; font-size:20px; font-weight:700; padding:18px 0; background:var(--acc); border-color:var(--acc); color:#fff; }
+  #go.on { background:var(--ng); border-color:var(--ng); }
+  .stats { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:6px; margin:10px 0; }
+  .stats div { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:6px 2px; text-align:center; font-size:11px; color:var(--sub); }
+  .stats b { display:block; font-size:20px; color:var(--ink); font-variant-numeric:tabular-nums; }
+  #now { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px; min-height:46px; color:var(--sub); font-size:15px; }
+  .opt { display:flex; align-items:center; gap:8px; font-size:14px; margin:8px 0; }
+  .opt input[type=text] { width:7em; font:inherit; padding:5px 8px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+  #log { list-style:none; margin:10px 0 0; padding:0; font-size:14px; }
+  #log li { border-top:1px solid var(--line); padding:6px 0; display:flex; gap:8px; }
+  #log li span:first-child { flex:none; color:var(--sub); font-variant-numeric:tabular-nums; font-size:12px; padding-top:2px; }
+  #log .skip { color:var(--sub); } #log .hit { color:var(--acc); font-weight:700; } #log .bad { color:var(--ng); } #log .sys { color:var(--ok); }
+  #result { white-space:pre-wrap; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px; font-size:14px; margin-top:10px; }
+  .row { display:flex; gap:8px; margin-top:8px; } .row button { flex:1; }
+</style>
+</head>
+<body>
+<header><a href="./">‹ 秘書</a><h1>🚗 聞き取りの試し(0円)</h1></header>
+<p class="muted">AIにはまだつないでいません(費用0円)。通勤の間つないだままにして、次の3つを確かめます。<br>
+① 画面をつけたまま30分聞き続けられるか ② 「ひしょ、〜」と呼びかけたときだけ拾えるか ③ 読み上げのあと、また聞き取りに戻れるか<br>
+秘書アプリを前に出したまま、画面を消さないでください(地図などに切り替えると止まります)。</p>
+
+<button id="go">▶ 試しを始める</button>
+<div class="stats">
+  <div><b id="sTime">0:00</b>つないだ時間</div>
+  <div><b id="sRe">0</b>聞き直し</div>
+  <div><b id="sHit">0</b>呼びかけ</div>
+  <div><b id="sGap">0秒</b>最長の途切れ</div>
+</div>
+<div id="now">止まっています</div>
+<div class="opt"><label>呼びかけの言葉 <input type="text" id="wake" value="ひしょ"></label></div>
+<div class="opt"><label><input type="checkbox" id="speak" checked> 呼びかけに読み上げで返事する</label></div>
+<div id="result" hidden></div>
+<div class="row" id="resultBtns" hidden><button id="copy">📋 結果をコピー</button><button id="clear">記録を消す</button></div>
+<ul id="log"></ul>
+
+<script>
+// 会話型の秘書を作る前の試し。iPhone の音声認識(0円)を長くつないだまま使えるかだけを見る。AI には何も送らない
+const $ = (id) => document.getElementById(id);
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const pad = (n) => String(n).padStart(2, "0");
+const clock = (t = Date.now()) => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+const mmss = (ms) => `${Math.floor(ms / 60000)}:${pad(Math.floor(ms / 1000) % 60)}`;
+const KEY = "hisho:talktest";
+
+let on = false, rec = null, speaking = false, waitQ = 0, wake = null, tick = null;
+let st = null; // 今回の記録
+const fresh = () => ({ t0: Date.now(), t1: 0, restarts: 0, hits: 0, skips: 0, hidden: 0, maxGap: 0, endAt: 0, quick: 0, log: [] });
+function save() { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch {} }
+function load() { try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch { return null; } }
+
+function addLog(text, cls = "") {
+  st.log.push([Date.now(), text, cls]); if (st.log.length > 400) st.log.shift();
+  $("log").insertAdjacentHTML("afterbegin", `<li class="${cls}"><span>${clock()}</span><span></span></li>`);
+  $("log").firstElementChild.lastElementChild.textContent = text;
+  save();
+}
+function paint() {
+  const end = on ? Date.now() : st?.t1 || 0;
+  $("sTime").textContent = st ? mmss(end - st.t0) : "0:00";
+  $("sRe").textContent = st?.restarts || 0; $("sHit").textContent = st?.hits || 0;
+  $("sGap").textContent = `${Math.round((st?.maxGap || 0) / 1000)}秒`;
+}
+
+// 呼びかけ:「ひしょ」「秘書」「ヒショ」+ 続きの言葉
+function wakeRe() {
+  const w = $("wake").value.trim() || "ひしょ";
+  const alt = w === "ひしょ" ? "ひしょ|秘書|ヒショ" : w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^\\s*(?:ねえ|ねぇ)?\\s*(?:${alt})(?:さん)?[、,。\\s]*`);
+}
+function heard(text) {
+  text = text.trim(); if (!text) return;
+  const m = text.match(wakeRe());
+  if (m || Date.now() < waitQ) {
+    const q = m ? text.slice(m[0].length).trim() : text;
+    waitQ = 0;
+    if (!q) { addLog(`呼びかけ:「${text}」→ 続きを待ちます`, "hit"); waitQ = Date.now() + 8000; reply("はい、どうぞ"); return; }
+    st.hits++; addLog(`質問として拾った:「${q}」`, "hit");
+    reply(`「${q}」と聞こえました`);
+  } else { st.skips++; addLog(`呼びかけなし(送らない):「${text}」`, "skip"); }
+  paint();
+}
+
+// 読み上げの間は聞き取りを止める(自分の声を拾わないように)。読み終えたら聞き直す
+function reply(text) {
+  if (!$("speak").checked || !window.speechSynthesis) return;
+  speaking = true; try { rec?.abort(); } catch {}
+  const u = new SpeechSynthesisUtterance(text); u.lang = "ja-JP";
+  let done = false;
+  const back = () => { if (done) return; done = true; speaking = false; if (on) startOnce(); };
+  u.onend = back; u.onerror = (e) => { addLog(`読み上げできませんでした(${e.error})`, "bad"); back(); };
+  setTimeout(back, 4000 + text.length * 300); // onend が来ないことがあるときの保険
+  speechSynthesis.cancel(); speechSynthesis.speak(u);
+}
+
+function startOnce() {
+  if (!on || speaking) return;
+  const r = new SR(); rec = r; let began = Date.now();
+  r.lang = "ja-JP"; r.continuous = true; r.interimResults = true;
+  r.onstart = () => {
+    began = Date.now();
+    if (st.endAt) { const gap = began - st.endAt; if (gap > st.maxGap) st.maxGap = gap; if (gap > 3000) addLog(`${Math.round(gap / 1000)}秒 聞けていなかった`, "bad"); }
+    st.endAt = 0; $("now").textContent = "聞いています…"; save();
+  };
+  r.onresult = (e) => {
+    let interim = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) heard(e.results[i][0].transcript); else interim += e.results[i][0].transcript;
+    }
+    $("now").textContent = interim ? "聞き取り中:" + interim : "聞いています…";
+  };
+  r.onerror = (e) => {
+    if (e.error === "no-speech" || e.error === "aborted") return;
+    addLog(`音声認識のエラー:${e.error}`, "bad");
+    if (["not-allowed", "service-not-allowed", "audio-capture"].includes(e.error)) stop("音声認識が使えません(許可を確かめてください)");
+  };
+  r.onend = () => {
+    if (rec !== r) return;
+    rec = null;
+    if (!on || speaking) return;
+    st.endAt = Date.now(); st.restarts++;
+    // すぐ終わるのが続くときは3秒待ってからつなぎ直す(車では止めずに粘る)
+    st.quick = Date.now() - began < 1500 ? st.quick + 1 : 0;
+    $("now").textContent = "つなぎ直しています…"; paint();
+    setTimeout(() => { if (on && !rec && !speaking) try { startOnce(); } catch (err) { addLog("つなぎ直せませんでした:" + err.message, "bad"); } }, st.quick >= 3 ? 3000 : 0);
+  };
+  r.start();
+}
+
+async function keepAwake() { try { wake = await navigator.wakeLock?.request("screen"); } catch { wake = null; } }
+function start() {
+  if (!SR) { alert("この端末では音声認識が使えません"); return; }
+  st = fresh(); on = true; $("log").innerHTML = ""; $("result").hidden = $("resultBtns").hidden = true;
+  $("go").textContent = "■ 終える"; $("go").classList.add("on");
+  addLog("試しを始めました", "sys"); keepAwake();
+  clearInterval(tick); tick = setInterval(() => {
+    paint();
+    // 何も知らせずに止まっていたら、つなぎ直す
+    if (on && !rec && !speaking && st.endAt && Date.now() - st.endAt > 5000) { addLog("止まっていたのでつなぎ直しました", "bad"); try { startOnce(); } catch {} }
+  }, 1000);
+  try { startOnce(); } catch (err) { stop("始められませんでした:" + err.message); }
+}
+function stop(why = "") {
+  on = false; clearInterval(tick);
+  try { rec?.abort(); } catch {} rec = null; speechSynthesis?.cancel();
+  wake?.release?.(); wake = null;
+  st.t1 = Date.now(); addLog(why || "試しを終えました", why ? "bad" : "sys");
+  $("go").textContent = "▶ 試しを始める"; $("go").classList.remove("on"); $("now").textContent = "止まっています";
+  paint(); showResult();
+}
+function summary(s) {
+  const d = new Date(s.t0);
+  return `聞き取りの試し ${d.getMonth() + 1}/${d.getDate()} ${clock(s.t0).slice(0, 5)}〜${clock(s.t1 || Date.now()).slice(0, 5)}\n` +
+    `つないだ時間 ${mmss((s.t1 || Date.now()) - s.t0)} / 聞き直し ${s.restarts}回 / 最長の途切れ ${Math.round(s.maxGap / 1000)}秒\n` +
+    `呼びかけで拾った ${s.hits}回 / 呼びかけなしで送らなかった ${s.skips}回 / 画面が隠れた ${s.hidden}回\n` +
+    `--- 気になった記録 ---\n` + (s.log.filter((l) => l[2] === "bad" || l[2] === "hit").slice(-30).map((l) => `${clock(l[0])} ${l[1]}`).join("\n") || "なし");
+}
+function showResult() { $("result").textContent = summary(st); $("result").hidden = $("resultBtns").hidden = false; }
+
+$("go").onclick = () => (on ? stop() : start());
+$("copy").onclick = async () => {
+  const t = summary(st);
+  try { await navigator.clipboard.writeText(t); } catch { const a = document.createElement("textarea"); a.value = t; document.body.append(a); a.select(); document.execCommand("copy"); a.remove(); }
+  $("copy").textContent = "✓ コピーしました"; setTimeout(() => ($("copy").textContent = "📋 結果をコピー"), 2000);
+};
+$("clear").onclick = () => { try { localStorage.removeItem(KEY); } catch {} st = null; $("log").innerHTML = ""; $("result").hidden = $("resultBtns").hidden = true; paint(); };
+document.addEventListener("visibilitychange", () => {
+  if (!on) return;
+  if (document.hidden) { st.hidden++; addLog("画面が隠れました(聞き取りが止まります)", "bad"); }
+  else { addLog("画面に戻りました", "sys"); keepAwake(); if (!rec && !speaking) try { startOnce(); } catch {} }
+});
+
+// 前回の結果があれば出す
+st = load();
+if (st) { if (!st.t1) st.t1 = st.log.at(-1)?.[0] || Date.now(); for (const [t, text, cls] of st.log) { $("log").insertAdjacentHTML("afterbegin", `<li class="${cls}"><span>${clock(t)}</span><span></span></li>`); $("log").firstElementChild.lastElementChild.textContent = text; } paint(); showResult(); }
+</script>
+</body>
+</html>
