@@ -599,7 +599,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "51ab96db4e9764627d8eb31d85e2a93d36433bcd";
+const BUILD = "9b3be8bb13f3a907596b54469a46a170eb717786";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -1322,7 +1322,7 @@ function rowHtml(it, mode = view) {
   const det = op ? "" : dl.length > 1 ? `中身${dl.length}件 ▾` : dl[0] ? esc(dl[0].length > 40 ? dl[0].slice(0, 40) + "…" : dl[0]) : "";
   const sub = [it.area, it.kind, it.person && "👤" + it.person, it.due && `<span class="due">期限 ${md(it.due)}</span>`, det, mode !== "todo" && it.item_date && md(it.item_date)].filter(Boolean);
   const done = it.status === "完了" || doneWait.has(String(it.id));
-  const xp = op ? `<div class="xp">${dl.length ? `<ul>${dl.map((l) => `<li>${esc(l.replace(/^[・\-*]\s*/, ""))}</li>`).join("")}</ul>` : ""}<div class="xpb"><button class="xedit">✏️ 修正する</button><button class="xclose">▴ 閉じる</button></div></div>` : "";
+  const xp = op ? `<div class="xp">${dl.length ? `<ul>${dl.map((l) => `<li>${esc(l.replace(/^[・\-*]\s*/, ""))}</li>`).join("")}</ul>` : ""}<div class="xpb"><button class="xedit">✏️ 修正する</button><button class="xcopy">📋 コピー</button><button class="xclose">▴ 閉じる</button></div></div>` : "";
   return `<div class="lrow${done ? " done" : ""}${over ? " over" : ""}${op ? " open" : ""}" data-id="${it.id}">
     ${CHECKABLE.includes(it.category) && !done ? `<span class="star${it.focused ? " on" : ""}" role="button" aria-label="今やることに入れる">${it.focused ? "★" : "☆"}</span>` : ""}
     ${CHECKABLE.includes(it.category) || it.category === "アイデア" ? `<input type="checkbox" ${done ? "checked" : ""} aria-label="完了">` : ""}
@@ -1452,6 +1452,12 @@ for (const box of ["list", "home"]) {
     if (!tx) return;
     const row = tx.closest(".lrow"), id = row.dataset.id, it = [...listItemsCache, ...homeCache].find((i) => String(i.id) === id);
     if (e.target.closest(".xedit")) return openItem(it);
+    const cp = e.target.closest(".xcopy");
+    if (cp) { // 題とくわしく(・の箇条書き)をコピー
+      await copyText([it.title, ...detailLines(it.detail).map((l) => "・" + l.replace(/^[・\-*]\s*/, ""))].join("\n"));
+      cp.textContent = "✓ コピーしました"; setTimeout(() => (cp.textContent = "📋 コピー"), 2000);
+      return;
+    }
     if (!it) return;
     if (openRows.has(id)) openRows.delete(id); else openRows.add(id);
     row.outerHTML = rowHtml(it, box === "list" ? view : row.closest(".fam") ? "family" : "todo");
@@ -1726,13 +1732,16 @@ for (const id of ["memoDlg", "dayDlg"]) {
     if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) $(id).close();
   });
 }
-$("mdCopy").onclick = async () => {
-  try { await navigator.clipboard.writeText(memoCopyText); }
+async function copyText(text, host = document.body) {
+  try { await navigator.clipboard.writeText(text); }
   catch {
     // 古いSafariなど clipboard が使えないとき
     const t = document.createElement("textarea");
-    t.value = memoCopyText; $("memoDlg").append(t); t.select(); document.execCommand("copy"); t.remove();
+    t.value = text; host.append(t); t.select(); document.execCommand("copy"); t.remove();
   }
+}
+$("mdCopy").onclick = async () => {
+  await copyText(memoCopyText, $("memoDlg"));
   // 開いている間は画面の一番上に出るので、知らせはボタンの文字で出す
   $("mdCopy").textContent = "✓ コピーしました";
   setTimeout(() => ($("mdCopy").textContent = "📋 コピー"), 2000);
