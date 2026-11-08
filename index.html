@@ -141,6 +141,7 @@
   .lrow .tx { flex:1; min-width:0; cursor:pointer; }
   .lrow .tx small { display:block; color:var(--sub); font-size:12px; margin-top:1px; }
   .lrow.done .tx > span { text-decoration:line-through; color:var(--sub); }
+  .dim .lrow { opacity:.5; }
   .lrow .undo { flex:none; align-self:center; color:var(--acc); font-size:12px; font-weight:700; padding:10px 8px; margin:-10px -8px; cursor:pointer; }
   .lrow.over small .due { color:var(--ng); font-weight:700; }
   .group h3 small { font-weight:400; color:var(--sub); }
@@ -590,7 +591,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "c79005a57ae681ba6c470d382cb013b36b2945b7";
+const BUILD = "a173846595a5605965c8878f7e5af8180ac3d070";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -1312,7 +1313,7 @@ function rowHtml(it, mode = view) {
   const done = it.status === "完了" || doneWait.has(String(it.id));
   return `<div class="lrow${done ? " done" : ""}${over ? " over" : ""}" data-id="${it.id}">
     ${CHECKABLE.includes(it.category) && !done ? `<span class="star${it.focused ? " on" : ""}" role="button" aria-label="今やることに入れる">${it.focused ? "★" : "☆"}</span>` : ""}
-    ${CHECKABLE.includes(it.category) ? `<input type="checkbox" ${done ? "checked" : ""} aria-label="完了">` : ""}
+    ${CHECKABLE.includes(it.category) || it.category === "アイデア" ? `<input type="checkbox" ${done ? "checked" : ""} aria-label="完了">` : ""}
     <div class="tx"><span>${esc(it.title)}</span>${sub.length ? `<small>${sub.map((x) => (x.startsWith("<") ? x : esc(x))).join("・")}</small>` : ""}</div>${doneWait.has(String(it.id)) ? `<span class="undo" role="button">もう一度押すと戻る</span>` : ""}</div>`;
 }
 function group(title, items, cls = "") { return items.length ? `<div class="group"><h3 class="${cls}">${title} <small>${items.length}</small></h3>${items.map(rowHtml).join("")}</div>` : ""; }
@@ -1342,6 +1343,10 @@ async function loadList() {
         group("それ以降", open.filter((i) => i.due > nwe).sort(byDue)) +
         group("期限なし", open.filter((i) => !i.due)) +
         group("完了", items.filter((i) => i.status === "完了"));
+    } else if (view === "idea") {
+      // 💡 やったものは一番下に薄く(やった日が新しい順)
+      const did = items.filter((i) => i.status === "完了").sort((a, b) => (b.done_at || "").localeCompare(a.done_at || ""));
+      $("list").innerHTML = items.filter((i) => i.status !== "完了").map(rowHtml).join("") + `<div class="dim">${group("✔ やった", did)}</div>`;
     } else if (view === "record") {
       $("list").innerHTML = v[2].map((c) => group(`${ICON[c]} ${c}`, items.filter((i) => i.category === c))).join("");
     } else {
@@ -1676,6 +1681,15 @@ new MutationObserver(() => {
   if (open && !locked) { lockY = window.scrollY; document.body.style.top = `-${lockY}px`; document.body.classList.add("dlg-lock"); }
   if (!open && locked) { document.body.classList.remove("dlg-lock"); document.body.style.top = ""; window.scrollTo(0, lockY); }
 }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open"] });
+// iPhone:キーボードを閉じたあと、下のタブがキーボードの高さぶん上(画面の真ん中)に残ることがある → 置き直す
+function fixTabs() {
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName)) return; // まだ書いている
+  const nav = document.querySelector("nav.tabs");
+  nav.style.display = "none"; void nav.offsetHeight; nav.style.display = "";
+  if (!document.body.classList.contains("dlg-lock")) window.scrollTo(window.scrollX, window.scrollY);
+}
+document.addEventListener("focusout", () => setTimeout(fixTabs, 400));
+window.visualViewport?.addEventListener("resize", () => { if (visualViewport.height > window.innerHeight * 0.85) setTimeout(fixTabs, 100); });
 // 見るだけの小窓(メモ・その日の予定)は、外側を押すと閉じる。直す小窓は書きかけが消えないよう閉じない
 for (const id of ["memoDlg", "dayDlg"]) {
   $(id).addEventListener("click", (e) => {
