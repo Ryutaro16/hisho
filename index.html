@@ -27,7 +27,7 @@
   /* 話す:0円(青)と高精度(赤枠)の2つのタイル。押すとその場で始まり、押したタイルが赤い「■ 止める 経過時間」になる */
   .tiles { display:flex; gap:8px; }
   .tile { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; border-radius:16px; padding:14px 6px 12px; min-height:0; line-height:1.3; }
-  .tile .ic { font-size:28px; line-height:1.1; } .tile b { font-size:16px; } .tile small { font-size:11px; opacity:.85; font-weight:400; }
+  .tile .ic { font-size:28px; line-height:1.1; } .tile b { font-size:16px; } .tile small { font-size:11px; opacity:.85; font-weight:400; white-space:pre-line; }
   .tile.t-sr { background:#1e88ff; border:1.5px solid #1e88ff; color:#fff; }
   .tile.t-rec { background:#fdeceb; border:1.5px solid #e5484d; color:#c0392b; }
   .tile.on { background:#e5484d; border-color:#e5484d; color:#fff; animation:blink 1.6s infinite; }
@@ -332,8 +332,10 @@
     <section id="speak">
       <div class="rec-box">
         <div class="tiles">
-          <button id="srBtn" class="tile t-sr" hidden><span class="ic">🎙</span><b>0円で話す</b><small>iPhoneの音声認識</small></button>
-          <button id="recBtn" class="tile t-rec"><span class="ic">●</span><b>高精度で録音</b><small>1分 約0.7円</small></button>
+          <button id="srBtn" class="tile t-sr" hidden><span class="ic">🎙</span><b>0円で話す</b><small>iPhoneの音声認識
+始めにピコと鳴ります</small></button>
+          <button id="recBtn" class="tile t-rec"><span class="ic">●</span><b>高精度で録音</b><small>1分 約0.7円
+音は鳴りません</small></button>
         </div>
         <div class="filelink"><button class="link" id="fileBtn">📂 音声ファイルから文字にする</button><button id="retryBtn" hidden>文字起こしをやり直す</button></div>
         <!-- 「audio/*」だと iPhone が写真・ビデオのメニューを先に出すので、拡張子だけにして「ファイル」を直接開く -->
@@ -601,7 +603,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "e9c5b02686fb09c9125cecdf9c3dd514416033aa";
+const BUILD = "5a216c1af9010b36168d8ba665194141ead0f5a0";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -1014,9 +1016,9 @@ function tile(id, ic, title, sub, on) {
 function paintTiles() {
   const more = !!draft.input.trim();
   if (srOn) tile("srBtn", "■", `止める ${mmss(Date.now() - srT0)}`, "聞いています…(0円)", true);
-  else tile("srBtn", "🎙", more ? "続けて話す" : "0円で話す", "iPhoneの音声認識");
+  else tile("srBtn", "🎙", more ? "続けて話す" : "0円で話す", "iPhoneの音声認識\n始めにピコと鳴ります"); // ピコは iPhone が鳴らす音で、マナーモードでも消せない
   if (recording) tile("recBtn", "■", `止める ${mmss(Date.now() - recStart)}`, "録音中・1分 約0.7円", true);
-  else tile("recBtn", "●", more ? "続けて録音" : "高精度で録音", "1分 約0.7円");
+  else tile("recBtn", "●", more ? "続けて録音" : "高精度で録音", "1分 約0.7円\n音は鳴りません");
 }
 function recInfo() {
   paintTiles();
@@ -2542,6 +2544,7 @@ async function loadProfile() {
   } catch { /* 合言葉がまだ・通信なし。控えのまま */ }
 }
 applyProfile(store.get("hisho:profile"));
+showPage("pageCal"); // 開いたときはカレンダーから
 loadProfile();
 autoClear();
 render();

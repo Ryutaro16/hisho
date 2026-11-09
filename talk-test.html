@@ -36,7 +36,7 @@
 <body>
 <header><a href="./">‹ 秘書</a><h1>🚗 聞き取りの試し(0円)</h1></header>
 <p class="muted">AIにはまだつないでいません(費用0円)。通勤の間つないだままにして、次の3つを確かめます。<br>
-① 画面をつけたまま30分聞き続けられるか ② 「ひしょ、〜」と呼びかけたときだけ拾えるか ③ 読み上げのあと、また聞き取りに戻れるか<br>
+① 画面をつけたまま30分聞き続けられるか ② 「ひしょ、〜」と呼びかけたときだけ拾えるか(「ひしょ」だけ言ったら、画面に「どうぞ」が出ている20秒の間に続きを話す) ③ 読み上げのあと、また聞き取りに戻れるか<br>
 秘書アプリを前に出したまま、画面を消さないでください(地図などに切り替えると止まります)。</p>
 
 <button id="go">▶ 試しを始める</button>
@@ -85,7 +85,7 @@ function paint() {
 function wakeRe() {
   const w = $("wake").value.trim() || "ひしょ";
   const alt = w === "ひしょ" ? "ひしょ|秘書|ヒショ" : w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^\\s*(?:ねえ|ねぇ)?\\s*(?:${alt})(?:さん)?[、,。\\s]*`);
+  return new RegExp(`^.{0,6}?(?:${alt})(?:さん)?[、,。!?！？\\s]*`);
 }
 function heard(text) {
   text = text.trim(); if (!text) return;
@@ -93,7 +93,8 @@ function heard(text) {
   if (m || Date.now() < waitQ) {
     const q = m ? text.slice(m[0].length).trim() : text;
     waitQ = 0;
-    if (!q) { addLog(`呼びかけ:「${text}」→ 続きを待ちます`, "hit"); waitQ = Date.now() + 8000; reply("はい、どうぞ"); return; }
+    // 呼びかけだけのときは読み上げない(読み上げる間は聞き取りを止めるので、続けて話した言葉が切れてしまう=11/9の試し)
+    if (!q) { addLog(`呼びかけ:「${text}」→ 続きを20秒待ちます`, "hit"); waitQ = Date.now() + 20000; $("now").textContent = "🙋 どうぞ、話してください"; return; }
     st.hits++; addLog(`質問として拾った:「${q}」`, "hit");
     reply(`「${q}」と聞こえました`);
   } else { st.skips++; addLog(`呼びかけなし(送らない):「${text}」`, "skip"); }
@@ -105,9 +106,10 @@ function reply(text) {
   if (!$("speak").checked || !window.speechSynthesis) return;
   speaking = true; try { rec?.abort(); } catch {}
   const u = new SpeechSynthesisUtterance(text); u.lang = "ja-JP";
-  let done = false;
+  let done = false, t0 = 0;
   const back = () => { if (done) return; done = true; speaking = false; if (on) startOnce(); };
-  u.onend = back; u.onerror = (e) => { addLog(`読み上げできませんでした(${e.error})`, "bad"); back(); };
+  u.onstart = () => { t0 = Date.now(); };
+  u.onend = () => { addLog(t0 ? `読み上げた(${((Date.now() - t0) / 1000).toFixed(1)}秒):「${text}」` : `読み上げが始まらなかった:「${text}」`, t0 ? "sys" : "bad"); back(); }; u.onerror = (e) => { addLog(`読み上げできませんでした(${e.error})`, "bad"); back(); };
   setTimeout(back, 4000 + text.length * 300); // onend が来ないことがあるときの保険
   speechSynthesis.cancel(); speechSynthesis.speak(u);
 }
@@ -126,7 +128,8 @@ function startOnce() {
     for (let i = e.resultIndex; i < e.results.length; i++) {
       if (e.results[i].isFinal) heard(e.results[i][0].transcript); else interim += e.results[i][0].transcript;
     }
-    $("now").textContent = interim ? "聞き取り中:" + interim : "聞いています…";
+    if (interim && waitQ) waitQ = Math.max(waitQ, Date.now() + 8000); // 話している途中で時間切れにしない
+    $("now").textContent = interim ? "聞き取り中:" + interim : waitQ > Date.now() ? "🙋 どうぞ、話してください" : "聞いています…";
   };
   r.onerror = (e) => {
     if (e.error === "no-speech" || e.error === "aborted") return;
@@ -154,6 +157,7 @@ function start() {
   addLog("試しを始めました", "sys"); keepAwake();
   clearInterval(tick); tick = setInterval(() => {
     paint();
+    if (waitQ && Date.now() > waitQ) { waitQ = 0; addLog("呼びかけのあと、続きが聞こえませんでした", "bad"); $("now").textContent = "聞いています…"; }
     // 何も知らせずに止まっていたら、つなぎ直す
     if (on && !rec && !speaking && st.endAt && Date.now() - st.endAt > 5000) { addLog("止まっていたのでつなぎ直しました", "bad"); try { startOnce(); } catch {} }
   }, 1000);
@@ -172,7 +176,7 @@ function summary(s) {
   return `聞き取りの試し ${d.getMonth() + 1}/${d.getDate()} ${clock(s.t0).slice(0, 5)}〜${clock(s.t1 || Date.now()).slice(0, 5)}\n` +
     `つないだ時間 ${mmss((s.t1 || Date.now()) - s.t0)} / 聞き直し ${s.restarts}回 / 最長の途切れ ${Math.round(s.maxGap / 1000)}秒\n` +
     `呼びかけで拾った ${s.hits}回 / 呼びかけなしで送らなかった ${s.skips}回 / 画面が隠れた ${s.hidden}回\n` +
-    `--- 気になった記録 ---\n` + (s.log.filter((l) => l[2] === "bad" || l[2] === "hit").slice(-30).map((l) => `${clock(l[0])} ${l[1]}`).join("\n") || "なし");
+    `--- 記録(新しい30件) ---\n` + (s.log.filter((l) => l[2] !== "sys" || /読み上げ/.test(l[1])).slice(-30).map((l) => `${clock(l[0])} ${l[1]}`).join("\n") || "なし");
 }
 function showResult() { $("result").textContent = summary(st); $("result").hidden = $("resultBtns").hidden = false; }
 
