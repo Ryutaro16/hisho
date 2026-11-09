@@ -116,7 +116,7 @@ function reply(text) {
   const back = () => { if (done) return; done = true; speaking = false; if (on) startOnce(); };
   u.onstart = () => { t0 = Date.now(); };
   u.onend = () => { addLog(t0 ? `読み上げた(${((Date.now() - t0) / 1000).toFixed(1)}秒):「${text}」` : `読み上げが始まらなかった:「${text}」`, t0 ? "sys" : "bad"); back(); }; u.onerror = (e) => { addLog(`読み上げできませんでした(${e.error})`, "bad"); back(); };
-  setTimeout(back, 4000 + text.length * 300); // onend が来ないことがあるときの保険
+  setTimeout(() => { if (!done) addLog(t0 ? `読み上げの終わりが来なかった:「${text}」` : `読み上げが始まらなかった(鳴らなかった):「${text}」`, "bad"); back(); }, 4000 + text.length * 300); // onend が来ないことがあるときの保険
   speechSynthesis.cancel(); speechSynthesis.speak(u);
 }
 
@@ -161,6 +161,8 @@ function start() {
   st = fresh(); on = true; $("log").innerHTML = ""; $("result").hidden = $("resultBtns").hidden = true;
   $("go").textContent = "■ 終える"; $("go").classList.add("on");
   addLog("試しを始めました", "sys"); keepAwake();
+  // iPhoneは、押した直後に一度読み上げないと、あとの読み上げを黙って捨てる(11/10の試しで読み上げの記録が出なかった)
+  if ($("speak").checked && window.speechSynthesis) { const u = new SpeechSynthesisUtterance("はじめます"); u.lang = "ja-JP"; u.onstart = () => addLog("読み上げの準備OK", "sys"); speechSynthesis.cancel(); speechSynthesis.speak(u); }
   clearInterval(tick); tick = setInterval(() => {
     paint();
     if (waitQ && Date.now() > waitQ) { waitQ = 0; addLog("呼びかけのあと、続きが聞こえませんでした", "bad"); $("now").textContent = "聞いています…"; }
