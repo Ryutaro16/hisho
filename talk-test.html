@@ -36,7 +36,7 @@
 <body>
 <header><a href="./">‹ 秘書</a><h1>🚗 聞き取りの試し(0円)</h1></header>
 <p class="muted">AIにはまだつないでいません(費用0円)。通勤の間つないだままにして、次の3つを確かめます。<br>
-① 画面をつけたまま30分聞き続けられるか ② 「ひしょ、〜」と呼びかけたときだけ拾えるか(「ひしょ」だけ言ったら、画面に「どうぞ」が出ている20秒の間に続きを話す) ③ 読み上げのあと、また聞き取りに戻れるか<br>
+① 画面をつけたまま30分聞き続けられるか ② 呼びかけの言葉(下で変えられます)で始めたときだけ拾えるか(呼びかけだけ言ったら、画面に「どうぞ」が出ている20秒の間に続きを話す) ③ 読み上げのあと、また聞き取りに戻れるか<br>
 秘書アプリを前に出したまま、画面を消さないでください(地図などに切り替えると止まります)。</p>
 
 <button id="go">▶ 試しを始める</button>
@@ -47,7 +47,8 @@
   <div><b id="sGap">0秒</b>最長の途切れ</div>
 </div>
 <div id="now">止まっています</div>
-<div class="opt"><label>呼びかけの言葉 <input type="text" id="wake" value="ひしょ"></label></div>
+<div class="opt"><label>呼びかけの言葉 <input type="text" id="wake" style="width:12em"></label></div>
+<p class="muted" style="margin-top:-4px">空白で区切ると複数にできます(漢字で聞き取られることもあるので、かなと漢字の両方を入れると確実)。ひらがな・カタカナ、「ー」と「う」の違いは気にしなくて大丈夫です。この端末の中だけに保存します。</p>
 <div class="opt"><label><input type="checkbox" id="speak" checked> 呼びかけに読み上げで返事する</label></div>
 <div id="result" hidden></div>
 <div class="row" id="resultBtns" hidden><button id="copy">📋 結果をコピー</button><button id="clear">記録を消す</button></div>
@@ -81,15 +82,20 @@ function paint() {
   $("sGap").textContent = `${Math.round((st?.maxGap || 0) / 1000)}秒`;
 }
 
-// 呼びかけ:「ひしょ」「秘書」「ヒショ」+ 続きの言葉
+// 呼びかけの言葉(空白区切りで複数)。人の名前などを使うことがあるので、プログラムには書かず端末に保存する
+const WAKE_KEY = "hisho:wake", WAKE_DEFAULT = "ひしょ 秘書";
+try { $("wake").value = localStorage.getItem(WAKE_KEY) || WAKE_DEFAULT; } catch { $("wake").value = WAKE_DEFAULT; }
+$("wake").addEventListener("change", () => { try { localStorage.setItem(WAKE_KEY, $("wake").value.trim()); } catch {} });
+// ひらがな→カタカナ、「ー」→「ウ」にそろえて比べる(1文字ずつ置き換えるので、文字の位置は変わらない)
+const norm = (t) => t.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60)).replace(/ー/g, "ウ");
 function wakeRe() {
-  const w = $("wake").value.trim() || "ひしょ";
-  const alt = w === "ひしょ" ? "ひしょ|秘書|ヒショ" : w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^.{0,6}?(?:${alt})(?:さん)?[、,。!?！？\\s]*`);
+  const words = ($("wake").value.trim() || WAKE_DEFAULT).split(/[\s、,・]+/).filter(Boolean).map((w) => norm(w).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  // 頭に付けてよいのは「ねえ」「Hey」「おい」だけ(「昨日〇〇と会った」のような話を拾わないため)
+  return new RegExp(`^\\s*(?:(?:ネエ|ネェ|ヘイ|オイ|hey)[、,!！\\s]*)?(?:${words.join("|")})(?:サン)?[、,。!?！？\\s]*`, "i");
 }
 function heard(text) {
   text = text.trim(); if (!text) return;
-  const m = text.match(wakeRe());
+  const m = norm(text).match(wakeRe());
   if (m || Date.now() < waitQ) {
     const q = m ? text.slice(m[0].length).trim() : text;
     waitQ = 0;
