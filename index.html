@@ -173,8 +173,10 @@
   .lrow .xpb button { background:none; border:none; color:var(--acc); font-size:14px; font-weight:700; padding:8px 0; min-height:0; }
   /* ToDoの先送り(開いた行だけ) */
   .lrow .snz { font-size:12px; color:var(--sub); margin-top:8px; }
-  .lrow .xpb.snzb { gap:8px; flex-wrap:wrap; margin-top:2px; }
-  .lrow .xpb.snzb button { border:1px solid var(--acc); border-radius:9px; background:var(--card); padding:5px 11px; }
+  /* 4つを同じ幅で横一列に(折り返すと見た目が崩れるので、狭い画面では文字の左右の余白を詰める) */
+  .lrow .xpb.snzb { gap:5px; flex-wrap:nowrap; margin-top:2px; }
+  .lrow .xpb.snzb button { flex:1 1 0; min-width:0; white-space:nowrap; text-align:center; font-size:13px; border:1px solid var(--acc); border-radius:9px; background:var(--card); padding:5px 2px; }
+  @media (max-width:350px) { .lrow .xpb.snzb button { font-size:11px; } }
   .lrow .undo { flex:none; align-self:center; color:var(--acc); font-size:12px; font-weight:700; padding:10px 8px; margin:-10px -8px; cursor:pointer; }
   .lrow.over small .due { color:var(--ng); font-weight:700; }
   .group h3 small { font-weight:400; color:var(--sub); }
@@ -644,7 +646,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "b7a14d467aa3ee66960b953dfe11c4dfcc942ad3";
+const BUILD = "ae2ac95e7f840e4fe1d1f1d7f1e8ffacd6f94511";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
