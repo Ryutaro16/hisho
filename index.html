@@ -644,7 +644,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "20134134ff2b44a75c30c71841509f40055d8291";
+const BUILD = "e9f3898586c2362f58111aeee5ad49bad1fde3ba";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -2726,7 +2726,7 @@ async function loadProfile() {
   } catch { /* 合言葉がまだ・通信なし。控えのまま */ }
 }
 applyProfile(store.get("hisho:profile"));
-showPage("pageCal"); // 開いたときはカレンダーから
+showPage("pageHome"); // 開いたときはホームから(今日の予定とToDoが一目で見えるので)
 loadProfile();
 autoClear();
 render();
