@@ -177,6 +177,11 @@
   .lrow .xpb.snzb { gap:5px; flex-wrap:nowrap; margin-top:2px; }
   .lrow .xpb.snzb button { flex:1 1 0; min-width:0; white-space:nowrap; text-align:center; font-size:13px; border:1px solid var(--acc); border-radius:9px; background:var(--card); padding:5px 2px; }
   @media (max-width:350px) { .lrow .xpb.snzb button { font-size:11px; } }
+  /* 押した手応え:指が触れている間は少し沈んで色が付き、押したボタンは青く塗りつぶす */
+  .lrow .xpb.snzb button { transition:background .12s, color .12s, transform .08s; -webkit-tap-highlight-color:transparent; }
+  .lrow .xpb.snzb button:active { transform:scale(.94); background:var(--acc); color:var(--acc-ink, #fff); }
+  .lrow .xpb.snzb button.picked { background:var(--acc); color:var(--acc-ink, #fff); transform:none; opacity:1; padding-left:0; padding-right:0; letter-spacing:-.03em; font-size:12px; } /* 「✓12/12」がはみ出さないよう詰める */
+  .lrow .xpb.snzb button:disabled:not(.picked) { opacity:.4; }
   .lrow .undo { flex:none; align-self:center; color:var(--acc); font-size:12px; font-weight:700; padding:10px 8px; margin:-10px -8px; cursor:pointer; }
   .lrow.over small .due { color:var(--ng); font-weight:700; }
   .group h3 small { font-weight:400; color:var(--sub); }
@@ -646,7 +651,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "ae2ac95e7f840e4fe1d1f1d7f1e8ffacd6f94511";
+const BUILD = "7253614ab0f758842fb2860d3d6304057be03ee5";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -1512,7 +1517,7 @@ for (const box of ["list", "home"]) {
     const row = tx.closest(".lrow"), id = row.dataset.id, it = [...listItemsCache, ...homeCache].find((i) => String(i.id) === id);
     if (e.target.closest(".xedit")) return openItem(it);
     const sz = e.target.closest(".xsnz");
-    if (sz) return it && snooze(it, sz.dataset.to);
+    if (sz) return it && !sz.disabled && snooze(it, sz.dataset.to, sz);
     const cp = e.target.closest(".xcopy");
     if (cp) { // 題とくわしく(・の箇条書き)をコピー
       await copyText([it.title, ...detailLines(it.detail).map((l) => "・" + l.replace(/^[・\-*]\s*/, ""))].join("\n"));
@@ -1534,17 +1539,26 @@ function addMonth(today) {
   return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`;
 }
 const snoozeDue = (to, today = todayStr()) => (to === "" ? "" : to === "m" ? addMonth(today) : addDays(today, Number(to)));
-async function snooze(it, to) {
+async function snooze(it, to, btn) {
   const prev = it.due || "", due = snoozeDue(to);
+  // 押した手応え:押したボタンを青く塗って「✓ 11/19」に変え、少し見せてから行を動かす(すぐ動くと行が消えたように見えるため)。
+  // 保存中は同じ行のボタンを押せなくして二重に動かさない
+  const btns = btn ? [...btn.parentElement.querySelectorAll(".xsnz")] : [], label = btn?.textContent;
+  if (btn) { btns.forEach((b) => (b.disabled = true)); btn.classList.add("picked"); btn.textContent = due ? `✓${md(due).replace(/\(.\)$/, "")}` : "✓なし"; } // ボタンの幅に収まるよう短く
+  const shown = new Promise((r) => setTimeout(r, 700));
   try {
     const r = await post("/api/item", { action: "update", id: it.id, item: { due } });
+    await shown;
     openRows.delete(String(it.id)); // 期限が変わると別の区切りへ移るので、開いたままにしない
     refreshCurrent();
     toast(due ? `${md(due)}に動かしました` : "期限なしにしました", { label: "取り消す", run: async () => {
       try { await post("/api/item", { action: "update", id: it.id, item: { due: prev } }); toast("元に戻しました"); refreshCurrent(); } catch (e) { alert(e.message); }
     } });
     if (r.warn) alert(r.warn); // Googleのタスクに入らなかったとき
-  } catch (e) { alert(e.message); }
+  } catch (e) {
+    if (btn) { btns.forEach((b) => (b.disabled = false)); btn.classList.remove("picked"); btn.textContent = label; } // 保存できなければ元の見た目に戻す
+    alert(e.message);
+  }
 }
 // 項目の追加・修正・削除
 let itEditing = null;
