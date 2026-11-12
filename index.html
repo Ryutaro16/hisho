@@ -129,6 +129,27 @@
   .lnrow select { width:auto; flex:none; min-height:30px; font-size:14px; margin:0; }
   @media (prefers-color-scheme: dark) { .wg.fam { background:#33232a; } }
   @media (prefers-color-scheme: dark) { .wg.now { background:#2e2a1c; } .goalrow span { background:#2a3239; } }
+  /* 📅 今日(ホームのいちばん上。どこを押してもカレンダーの今日へ) */
+  .wg.today { cursor:pointer; }
+  .wg.today .wgt .wk { margin-left:6px; vertical-align:2px; }
+  .tdev { display:flex; gap:8px; padding:3px 0; font-size:15px; line-height:1.45; }
+  .tdev time { color:var(--sub); width:44px; flex:none; font-size:14px; }
+  .tdev span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tdev.fam span { color:#1e7d4f; } .tdev.task span { color:#0b6bcb; }
+  .tdhol { color:#d33; font-size:14px; padding:2px 0; }
+  .tdmore { color:var(--sub); font-size:13px; padding:2px 0 0 52px; }
+  .tdnext { font-size:13px; color:var(--sub); border-top:1px solid var(--line); margin-top:5px; padding-top:5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* ＋すぐ追加(ホームを見ている間だけ右下に浮かせる。main の外に置くのは、端から払うとき main が動くため) */
+  .fab { position:fixed; right:16px; bottom:calc(66px + env(safe-area-inset-bottom)); width:56px; height:56px; min-height:0; padding:0; border:none; border-radius:50%; background:var(--acc); color:#fff; font-size:32px; line-height:1; box-shadow:0 3px 10px rgba(0,0,0,.3); z-index:6; }
+  #home { padding-bottom:24px; } /* いちばん下の枠が ＋ に隠れないように */
+  .qkcats { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; margin:10px 0 4px; }
+  .qkcats button { min-height:46px; font-size:15px; font-weight:700; background:var(--acc); color:#fff; border-color:var(--acc); }
+  .qkcats button:disabled { opacity:.5; }
+  .qkdue { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .qkdue button { min-height:34px; padding:3px 12px; font-size:14px; }
+  .qkdue button.on { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .qkdue input { width:auto; flex:1; min-width:9em; }
+  #qkText.need { border-color:var(--ng); box-shadow:0 0 0 2px var(--ng); }
   /* 📋 まとめ */
   .chips { display:flex; gap:6px; overflow-x:auto; padding:2px 0 8px; margin:0 -16px; padding-left:16px; padding-right:16px; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
   .chips::-webkit-scrollbar { display:none; }
@@ -150,6 +171,10 @@
   .lrow .xp li::before { content:""; position:absolute; left:1px; top:14px; width:6px; height:6px; border-radius:50%; background:var(--acc); }
   .lrow .xpb { display:flex; gap:18px; margin-top:4px; }
   .lrow .xpb button { background:none; border:none; color:var(--acc); font-size:14px; font-weight:700; padding:8px 0; min-height:0; }
+  /* ToDoの先送り(開いた行だけ) */
+  .lrow .snz { font-size:12px; color:var(--sub); margin-top:8px; }
+  .lrow .xpb.snzb { gap:8px; flex-wrap:wrap; margin-top:2px; }
+  .lrow .xpb.snzb button { border:1px solid var(--acc); border-radius:9px; background:var(--card); padding:5px 11px; }
   .lrow .undo { flex:none; align-self:center; color:var(--acc); font-size:12px; font-weight:700; padding:10px 8px; margin:-10px -8px; cursor:pointer; }
   .lrow.over small .due { color:var(--ng); font-weight:700; }
   .group h3 small { font-weight:400; color:var(--sub); }
@@ -256,6 +281,7 @@
   .dayev b { display:block; font-size:16px; font-weight:600; }
   .dayev small { color:var(--sub); font-size:13px; }
   .dayev .h { color:#d33; }
+  .dayev.fam b { color:#1e7d4f; } /* 自分・家族の両方に入っている予定(1つにまとめたもの) */
   .evform label { display:block; font-size:13px; color:var(--sub); margin:8px 0 2px; }
   .evform .two { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; }
   .evform input { padding:7px 9px; min-width:0; }
@@ -317,6 +343,9 @@
   .muted { color:var(--sub); font-size:13px; }
   #toast { position:fixed; left:50%; bottom:90px; transform:translateX(-50%); background:#1f2933; color:#fff; padding:10px 18px; border-radius:20px; font-size:15px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:9; }
   #toast.show { opacity:.92; }
+  /* 「取り消す」付きのときだけ押せるようにする */
+  #toast.act { pointer-events:auto; display:flex; align-items:center; gap:14px; white-space:nowrap; }
+  #toast button { background:none; border:none; color:#7cc4ff; font-size:15px; font-weight:700; padding:2px 0; min-height:0; }
   [hidden] { display:none !important; }
   @media (prefers-color-scheme: dark) {
     :root { --cl:#30373e; --sunbg:#2c2123; --satbg:#1d2533; --outbg:#181c20; --bandbg:#2a3138; --bandline:#46505a; --ink:#e6e9ec; --sub:#9aa5b1; --line:#3a424a; --bg:#15191d; --card:#1f252b; --note-bg:#3a3320; --note-line:#6b5a2a; --ok:#5cc98f; --ng:#ff7b6b; --tab:#0e1114; }
@@ -465,6 +494,7 @@
   <!-- 🏠 ホーム(一画面で見渡す。各枠の「すべて」で下の一覧へ) -->
   <div id="pageHome" hidden>
     <header><h1 id="homeDate"></h1><button class="link" id="openSettings" aria-label="設定" style="font-size:22px">⚙</button></header>
+    <div id="homeToday"></div>
     <div id="home"></div>
   </div>
 
@@ -557,6 +587,17 @@
   <button data-page="pageMemo"><b>📝</b>メモ</button>
   <button data-page="pageMorning"><b>☀️</b>朝</button>
 </nav>
+<button id="quickFab" class="fab" aria-label="すぐ追加" hidden>＋</button>
+
+<dialog id="quickDlg" class="evform">
+  <h3>すぐ追加</h3>
+  <input id="qkText" placeholder="例:電池を買う" enterkeyhint="done" autocomplete="off">
+  <div class="qkcats" id="qkCats"><button data-c="ToDo" data-n="ToDo">✅ ToDo</button><button data-c="買い物・欲しいもの" data-kind="買う" data-n="買い物">🛒 買い物</button><button data-c="覚えておくこと" data-n="覚えておくこと">🧠 覚えておく</button><button data-c="アイデア" data-n="アイデア">💡 アイデア</button></div>
+  <label>期限(✅ ToDo・🛒 買い物のときだけ付きます)</label>
+  <div class="qkdue" id="qkDue"><button data-d="">なし</button><button data-d="0">今日</button><button data-d="1">明日</button><button data-d="pick">日付…</button><input type="date" id="qkDate" hidden></div>
+  <div class="row-btns"><button id="qkClose">閉じる</button></div>
+  <div class="muted">AIは使いません(0円)。長い話は 🎤話す で</div>
+</dialog>
 
 <dialog id="dayDlg">
   <h3 id="dayTitle"></h3>
@@ -603,7 +644,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "abf281b1875d53655543cbc5cfe36009c84e603e";
+const BUILD = "20134134ff2b44a75c30c71841509f40055d8291";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -664,6 +705,7 @@ function showPage(page, fromPop = false) {
   curPage = page;
   main.style.transform = "";
   for (const id of PAGES) $(id).hidden = id !== page;
+  $("quickFab").hidden = page !== "pageHome"; // ＋すぐ追加はホームだけ
   const tab = TAB_OF[page] || page;
   for (const x of document.querySelectorAll("nav.tabs button")) x.classList.toggle("on", x.dataset.page === tab);
   window.scrollTo(0, 0);
@@ -903,9 +945,17 @@ function savedText(r) {
   return `保存しました(${p.length ? p.join("、") : "メモだけ"})` + (r.warn ? "。" + r.warn : "");
 }
 
-function toast(msg) {
-  const t = $("toast"); t.textContent = msg; t.classList.add("show");
-  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove("show"), 1500);
+// act = { label, run } を渡すと、ボタン付きで4秒出す(先送りの「取り消す」など)
+function toast(msg, act) {
+  const t = $("toast"); t.textContent = msg;
+  if (act) {
+    const b = document.createElement("button");
+    b.textContent = act.label;
+    b.onclick = () => { b.remove(); clearTimeout(toast.timer); t.classList.remove("show", "act"); act.run(); };
+    t.append(b);
+  }
+  t.classList.toggle("act", !!act); t.classList.add("show");
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove("show", "act"), act ? 4000 : 1500);
 }
 function setStatus(msg, cls = "") { const s = $("status"); s.textContent = msg; s.className = cls; }
 
@@ -1326,7 +1376,9 @@ function rowHtml(it, mode = view) {
   const det = op ? "" : dl.length > 1 ? `中身${dl.length}件 ▾` : dl[0] ? esc(dl[0].length > 40 ? dl[0].slice(0, 40) + "…" : dl[0]) : "";
   const sub = [it.area, it.kind, it.person && "👤" + it.person, it.due && `<span class="due">期限 ${md(it.due)}</span>`, det, mode !== "todo" && it.item_date && md(it.item_date)].filter(Boolean);
   const done = it.status === "完了" || doneWait.has(String(it.id));
-  const xp = op ? `<div class="xp">${dl.length ? `<ul>${dl.map((l) => `<li>${esc(l.replace(/^[・\-*]\s*/, ""))}</li>`).join("")}</ul>` : ""}<div class="xpb"><button class="xedit">✏️ 修正する</button><button class="xcopy">📋 コピー</button><button class="xclose">▴ 閉じる</button></div></div>` : "";
+  // まだのToDoだけ「期限を動かす」(期限のない行には「期限なし」を出さない)
+  const snz = op && it.category === "ToDo" && !done ? `<div class="snz">期限を動かす</div><div class="xpb snzb"><button class="xsnz" data-to="1">明日へ</button><button class="xsnz" data-to="7">来週へ</button>${it.due ? `<button class="xsnz" data-to="">期限なし</button>` : ""}</div>` : "";
+  const xp = op ? `<div class="xp">${dl.length ? `<ul>${dl.map((l) => `<li>${esc(l.replace(/^[・\-*]\s*/, ""))}</li>`).join("")}</ul>` : ""}${snz}<div class="xpb"><button class="xedit">✏️ 修正する</button><button class="xcopy">📋 コピー</button><button class="xclose">▴ 閉じる</button></div></div>` : "";
   return `<div class="lrow${done ? " done" : ""}${over ? " over" : ""}${op ? " open" : ""}" data-id="${it.id}">
     ${CHECKABLE.includes(it.category) && !done ? `<span class="star${it.focused ? " on" : ""}" role="button" aria-label="今やることに入れる">${it.focused ? "★" : "☆"}</span>` : ""}
     ${CHECKABLE.includes(it.category) || it.category === "アイデア" ? `<input type="checkbox" ${done ? "checked" : ""} aria-label="完了">` : ""}
@@ -1405,7 +1457,8 @@ $("askAns").addEventListener("click", (e) => {
 });
 
 // 今いる画面(ホームか一覧)を読み直す
-const refreshCurrent = () => (!$("pageHome").hidden ? loadHome() : loadList());
+// (項目を直したあとなので、ホームの📅今日も間をあけずに読み直す)
+const refreshCurrent = () => (!$("pageHome").hidden ? ((todayFetchedAt = 0), loadHome()) : loadList());
 let homeCache = [];
 // □で完了にしたら4秒は取り消し線で残し、もう一度押せば戻す(2026-11-06 案B)。
 // 記録への保存は4秒たってから(Googleのタスク・奥さんへの「済みました」もそのとき)なので、取り消せば何も送らない
@@ -1456,6 +1509,8 @@ for (const box of ["list", "home"]) {
     if (!tx) return;
     const row = tx.closest(".lrow"), id = row.dataset.id, it = [...listItemsCache, ...homeCache].find((i) => String(i.id) === id);
     if (e.target.closest(".xedit")) return openItem(it);
+    const sz = e.target.closest(".xsnz");
+    if (sz) return it && snooze(it, sz.dataset.to);
     const cp = e.target.closest(".xcopy");
     if (cp) { // 題とくわしく(・の箇条書き)をコピー
       await copyText([it.title, ...detailLines(it.detail).map((l) => "・" + l.replace(/^[・\-*]\s*/, ""))].join("\n"));
@@ -1466,6 +1521,21 @@ for (const box of ["list", "home"]) {
     if (openRows.has(id)) openRows.delete(id); else openRows.add(id);
     row.outerHTML = rowHtml(it, box === "list" ? view : row.closest(".fam") ? "family" : "todo");
   });
+}
+// ToDoの期限を動かす(明日へ=今日の次の日、来週へ=今日から7日後、期限なし)。日付は端末の今日から数える。
+// 呼び方は項目を直すときと同じなので、Googleのタスクの期限も今の仕組みで一緒に動く。4秒は「取り消す」で元の期限に戻せる
+const snoozeDue = (to, today = todayStr()) => (to === "" ? "" : addDays(today, Number(to)));
+async function snooze(it, to) {
+  const prev = it.due || "", due = snoozeDue(to);
+  try {
+    const r = await post("/api/item", { action: "update", id: it.id, item: { due } });
+    openRows.delete(String(it.id)); // 期限が変わると別の区切りへ移るので、開いたままにしない
+    refreshCurrent();
+    toast(due ? `${md(due)}に動かしました` : "期限なしにしました", { label: "取り消す", run: async () => {
+      try { await post("/api/item", { action: "update", id: it.id, item: { due: prev } }); toast("元に戻しました"); refreshCurrent(); } catch (e) { alert(e.message); }
+    } });
+    if (r.warn) alert(r.warn); // Googleのタスクに入らなかったとき
+  } catch (e) { alert(e.message); }
 }
 // 項目の追加・修正・削除
 let itEditing = null;
@@ -1767,6 +1837,7 @@ async function pullTasks() {
 }
 async function loadHome() {
   pullTasks();
+  loadToday();
   const d = new Date();
   $("homeDate").textContent = `${d.getMonth() + 1}月${d.getDate()}日(${WEEK[d.getDay()]})`;
   if (!$("home").children.length) $("home").innerHTML = `<div class="muted">読み込み中…</div>`;
@@ -1822,6 +1893,83 @@ function openSettings(from) {
   $("setBack").textContent = from === "pageSpeak" ? "‹ 話す" : "‹ ホーム";
   showPage("pageSet");
 }
+// ---- 🏠 📅 今日(ホームのいちばん上)。カレンダーと同じ読み込みと控え(hisho:cal:)を使い回す。
+// カレンダー画面の状態(表示中の月 calMonth・calData)には触らない。控えがあれば先に出し、裏で読み直す ----
+var todayFetchedAt = 0;
+// 予定は3件まで(祝日は別の行)。時刻のある予定は時刻順、終日・何日も続く予定の2日目以降は「終日」で先に
+function todayLines(data, day) {
+  const hol = (data.holidays || []).filter((h) => h.date === day).map((h) => h.title);
+  const evs = (data.events || []).filter((e) => e.date <= day && (e.end_date || e.date) >= day)
+    .map((e) => ({ tm: e.start && e.date === day ? e.start : "", title: e.title, fam: !!e.calName }))
+    .sort((a, b) => a.tm.localeCompare(b.tm));
+  const tasks = dayTasks(day, data).filter((t) => !t.done).map((t) => ({ title: t.title, task: true }));
+  return { hol, items: [...evs, ...tasks] };
+}
+function renderToday(data, state = "") {
+  const t = todayStr(), tm = addDays(t, 1), wd = (s) => WEEK[new Date(s + "T00:00:00").getDay()];
+  const wk = data ? workOf(t, data) : { place: "" };
+  const badge = wk.place && WORK[wk.place] ? `<span class="wk ${WORK[wk.place].cls}">${esc(WORK[wk.place].short)}</span>` : "";
+  let body;
+  if (!data) body = `<div class="empty">${state === "error" ? "予定を読み込めませんでした" : "読み込み中…"}</div>`;
+  else {
+    const { hol, items } = todayLines(data, t), MAX = 3;
+    body = hol.map((h) => `<div class="tdhol">${esc(h)}</div>`).join("") +
+      items.slice(0, MAX).map((x) => `<div class="tdev${x.fam ? " fam" : ""}${x.task ? " task" : ""}"><time>${x.task ? "☐" : x.tm || "終日"}</time><span>${esc(x.title)}</span></div>`).join("") +
+      (items.length > MAX ? `<div class="tdmore">ほか${items.length - MAX}件</div>` : "") +
+      (!items.length ? `<div class="empty">今日の予定はありません</div>` : "");
+    const nx = todayLines(data, tm), next = [...nx.hol, ...nx.items.map((x) => x.title)];
+    body += `<div class="tdnext">明日(${wd(tm)}):${next.length ? esc(next[0]) + (next.length > 1 ? ` ほか${next.length - 1}件` : "") : "予定なし"}</div>`;
+    if (state === "error") body += `<div class="muted">前回の表示です(読み込めませんでした)</div>`;
+  }
+  $("homeToday").innerHTML = `<div class="wg today" role="button"><div class="wgt"><span>📅 今日${badge}</span><button>カレンダー ›</button></div>${body}</div>`;
+}
+async function loadToday() {
+  const d = new Date(), month = new Date(d.getFullYear(), d.getMonth(), 1);
+  const key = "hisho:cal:" + calRangeOf(month).start, cached = store.get(key);
+  renderToday(cached && calView(cached));
+  // 月の表は前後の週も読むので、月末の「明日」(来月1日)も今月分に入っている
+  if (cached && Date.now() - todayFetchedAt < 60e3) return; // ホームを開くたびにGoogleを読まない(1分に1回まで)
+  todayFetchedAt = Date.now();
+  try { renderToday(calView(await fetchCal(month))); }
+  catch { todayFetchedAt = 0; renderToday(cached && calView(cached), "error"); }
+}
+$("homeToday").addEventListener("click", () => {
+  const d = new Date();
+  calMonth = new Date(d.getFullYear(), d.getMonth(), 1); // 押したときだけ今月にする(カレンダーの「今月」と同じ)
+  showPage("pageCal");
+  openDay(todayStr());
+});
+
+// ---- ＋すぐ追加(ホームの右下)。1行書いて分野を押すと、その場で保存する(AIなし・0円) ----
+let qkDue = "";
+function setQkDue(v) {
+  qkDue = v;
+  for (const b of $("qkDue").querySelectorAll("button")) b.classList.toggle("on", b.dataset.d === v);
+  $("qkDate").hidden = v !== "pick";
+  if (v === "pick") { if (!$("qkDate").value) $("qkDate").value = addDays(todayStr(), 1); try { $("qkDate").showPicker?.(); } catch {} }
+}
+const qkDueValue = () => (qkDue === "pick" ? $("qkDate").value : qkDue === "" ? "" : addDays(todayStr(), Number(qkDue)));
+$("quickFab").onclick = () => { $("qkText").value = ""; $("qkDate").value = ""; setQkDue(""); $("quickDlg").showModal(); $("qkText").focus(); };
+$("qkClose").onclick = () => $("quickDlg").close();
+$("qkDue").addEventListener("click", (e) => { const b = e.target.closest("button[data-d]"); if (b) setQkDue(b.dataset.d); });
+$("qkCats").addEventListener("click", async (e) => {
+  const b = e.target.closest("button[data-c]");
+  if (!b) return;
+  const title = $("qkText").value.trim();
+  if (!title) { $("qkText").classList.add("need"); setTimeout(() => $("qkText").classList.remove("need"), 1200); $("qkText").focus(); return; }
+  // 期限を付けるのは ToDo と買い物だけ(覚えておく・アイデアは期限を持たない分野)
+  const dated = b.dataset.c === "ToDo" || b.dataset.c === "買い物・欲しいもの";
+  const item = { title, category: b.dataset.c, due: dated ? qkDueValue() : "", ...(b.dataset.kind ? { kind: b.dataset.kind } : {}) };
+  const btns = [...$("qkCats").children];
+  for (const x of btns) x.disabled = true;
+  try {
+    const r = await post("/api/item", { action: "add", item });
+    $("quickDlg").close(); toast(`${b.dataset.n}に追加しました`); refreshCurrent();
+    if (r.warn) alert(r.warn); // Googleのタスクに入らなかったとき
+  } catch (err) { alert(err.message); }
+  finally { for (const x of btns) x.disabled = false; }
+});
+
 $("openSettings").onclick = () => openSettings("pageHome");
 $("openSettings2").onclick = () => openSettings("pageSpeak");
 
@@ -1912,12 +2060,38 @@ const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate(
 const addDays = (s, n) => { const d = new Date(s + "T00:00:00"); d.setDate(d.getDate() + n); return ymd(d); };
 let calMonth = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })();
 let calData = { events: [], holidays: [] }, calLoaded = "";
-// 表示する6週間(月の1日を含む週の日曜から)
-function calRange() {
-  const first = new Date(calMonth); first.setDate(1 - first.getDay());
+// 表示する6週間(月の1日を含む週の日曜から)。month はその月の1日
+function calRangeOf(month) {
+  const first = new Date(month); first.setDate(1 - first.getDay());
   const start = ymd(first);
   return { start, end: addDays(start, 41) };
 }
+const calRange = () => calRangeOf(calMonth);
+// 自分のカレンダーと家族のカレンダーの両方に入っている同じ予定(同じ日・同じ名前・同じ時刻。終日どうしも同じ)は1行にまとめる。
+// Google側は変えず、見せ方だけ。まとめた行は家族の色で出し、直す・消すときは自分の方を開く(id・calId は自分の予定のまま)。
+// 同じカレンダーの中の重複はまとめない(本当に2つあるかもしれないので)
+function mergeSame(events) {
+  const key = (e) => [e.date, e.end_date || e.date, String(e.title ?? "").trim(), e.start || "", e.end || ""].join("\n");
+  const fams = new Map(); // key → まだ相手のいない家族の予定
+  for (const e of events) if (e.calName && !e.both) { const k = key(e); fams.set(k, [...(fams.get(k) || []), e]); }
+  const pair = new Map(), used = new Set(); // 自分の予定 → 家族の予定
+  for (const e of events) {
+    if (e.calName) continue;
+    const f = (fams.get(key(e)) || []).find((x) => !used.has(x));
+    if (f) { used.add(f); pair.set(e, f); }
+  }
+  const merged = events.filter((e) => !used.has(e)).map((e) => (pair.has(e) ? { ...e, calName: pair.get(e).calName, both: true } : e));
+  // 同じカレンダーの中に同じ予定が2つ以上入っていることもある(二重に登録したとき)。1行にして、日の一覧で数を知らせる
+  const first = new Map(), out = [];
+  for (const e of merged) {
+    const k = (e.calId || "") + "\n" + (e.calName || "") + "\n" + key(e), f = first.get(k);
+    if (f) f.same = (f.same || 1) + (e.same || 1);
+    else { const c = { ...e }; first.set(k, c); out.push(c); } // すでにまとめた控えをもう一度通しても数が変わらないよう、same はそのまま持つ
+  }
+  return out;
+}
+// 読み込んだカレンダー(控えも)を画面用に整える所。月の表・この月の予定・日の一覧・ホームの📅今日はすべてこれを通す
+const calView = (d) => ({ ...d, events: mergeSame(d.events || []), holidays: d.holidays || [] });
 // その月を表示するのに必要な週の数(5か6。一覧つきのときは余った週を出さずに、そのぶん枠を大きくする)
 function calWeeks() {
   if (!calListOn) return 6;
@@ -1974,33 +2148,41 @@ function renderCal() {
   renderWorkSum();
   renderCalList();
 }
+// その月の分を読み、この端末に控える(hisho:cal:表示の始まりの日)。返すのは控えと同じ、まとめる前の形。
+// カレンダー画面とホームの📅今日の両方から呼ぶので、calMonth・calData には触らない
+async function fetchCal(month) {
+  const { start, end } = calRangeOf(month);
+  // 勤務日数は前の月の16日から数えるので、そこから読む(表示は start から)
+  const from = ymd(new Date(month.getFullYear(), month.getMonth() - 1, Math.min(31, ...Object.values(WORK).map((w) => w.close)) + 1));
+  const key = "hisho:cal:" + start;
+  const [data, work, todo] = await Promise.all([post("/api/calendar", { action: "list", start: from, end }), post("/api/work", { start: from, end }).catch(() => ({ overrides: {} })),
+    post("/api/items", { categories: ["ToDo"] }).catch(() => ({ items: null }))]);
+  data.work = work.overrides || {};
+  // ToDo と Googleのタスクは同じもの。Googleに入れたToDo(gcal_id「task:リスト:タスク」)は、Googleのタスクの方を出さない(二重にしない)。
+  // Googleの側で完了にした・戻したときは、ToDoもそろえる。ToDoを読めなかったときは控えの分を使う
+  data.todos = todo.items ? todo.items.filter((i) => i.due && i.due >= from && i.due <= end).map((i) => ({ id: i.id, title: i.title, date: i.due, done: i.status === "完了", gtask: /^task:[^:]+:(.+)$/.exec(i.gcal_id || "")?.[1] })) : store.get(key)?.todos || [];
+  const linked = new Set(data.todos.map((t) => t.gtask).filter(Boolean));
+  for (const t of data.todos) {
+    const g = (data.tasks || []).find((x) => x.id === t.gtask);
+    if (g && g.done !== t.done) { t.done = g.done; post("/api/item", { action: "update", id: t.id, item: { status: g.done ? "完了" : "未着手" } }).catch(() => {}); }
+  }
+  data.tasks = (data.tasks || []).filter((x) => !linked.has(x.id));
+  store.set(key, data);
+  return data;
+}
 async function loadCal() {
   pullTasks();
-  const { start, end } = calRange();
-  // 勤務日数は前の月の16日から数えるので、そこから読む(表示は start から)
-  const from = ymd(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, Math.min(31, ...Object.values(WORK).map((w) => w.close)) + 1));
-  const key = "hisho:cal:" + start;
-  const cached = store.get(key);
-  if (cached) { calData = cached; }
+  const { start } = calRange();
+  const cached = store.get("hisho:cal:" + start);
+  if (cached) { calData = calView(cached); }
   else if (calLoaded !== start) calData = { events: [], holidays: [] };
   renderCal();
   $("calStatus").textContent = cached ? "" : "読み込み中…"; // 控え(前回の表示)があるときは出さない(目障りなだけなので)
   if (!leaveData) loadLeave();
   try {
-    const [data, work, todo] = await Promise.all([post("/api/calendar", { action: "list", start: from, end }), post("/api/work", { start: from, end }).catch(() => ({ overrides: {} })),
-      post("/api/items", { categories: ["ToDo"] }).catch(() => ({ items: calData.todos || [] }))]);
-    data.work = work.overrides || {};
-    // ToDo と Googleのタスクは同じもの。Googleに入れたToDo(gcal_id「task:リスト:タスク」)は、Googleのタスクの方を出さない(二重にしない)。
-    // Googleの側で完了にした・戻したときは、ToDoもそろえる
-    data.todos = (todo.items || []).filter((i) => i.due && i.due >= from && i.due <= end).map((i) => ({ id: i.id, title: i.title, date: i.due, done: i.status === "完了", gtask: /^task:[^:]+:(.+)$/.exec(i.gcal_id || "")?.[1] }));
-    const linked = new Set(data.todos.map((t) => t.gtask).filter(Boolean));
-    for (const t of data.todos) {
-      const g = (data.tasks || []).find((x) => x.id === t.gtask);
-      if (g && g.done !== t.done) { t.done = g.done; post("/api/item", { action: "update", id: t.id, item: { status: g.done ? "完了" : "未着手" } }).catch(() => {}); }
-    }
-    data.tasks = (data.tasks || []).filter((x) => !linked.has(x.id));
+    const data = await fetchCal(calMonth);
     if (calRange().start !== start) return; // 読み込み中に月を変えた
-    calData = data; calLoaded = start; store.set(key, data);
+    calData = calView(data); calLoaded = start;
     renderCal();
     if ($("dayDlg").open && dayOpen) openDay(dayOpen); // 日付の画面を開いたまま足したとき、新しい中身で出し直す
     $("calStatus").textContent = data.tasksError ? "Googleのタスクはまだ読めません" : "";
@@ -2030,17 +2212,17 @@ function timeText(e) {
 // ---- 勤務先(WORK は個人の設定から。days=曜日、close=締め日)。祝日と「休み」の予定は休み。その日だけ手で変えられる ----
 // 「11月分」は前の月の締め日の次の日から11月の締め日まで
 // 返り値 { place: 勤務先 or "", manual: 手で変えたか, why: 自動で決めた理由 }
-function workOf(day) {
-  const ov = calData.work?.[day];
+function workOf(day, data = calData) {
+  const ov = data.work?.[day];
   if (ov) return { place: ov === "休み" || !WORK[ov] ? "" : ov, manual: true, why: "手で変更" };
   const wd = new Date(day + "T00:00:00").getDay();
   let place = Object.keys(WORK).find((k) => WORK[k].days.includes(wd)) || "";
   // 1つの予定に「○○休み／夏休み／○○出勤」のように並べて書いてあることがあるので、区切って1つずつ見る
-  const titles = calData.events.filter((e) => e.date <= day && (e.end_date || e.date) >= day).flatMap((e) => e.title.split(/[／/、,]/)).map((t) => t.trim()).filter(Boolean);
+  const titles = data.events.filter((e) => e.date <= day && (e.end_date || e.date) >= day).flatMap((e) => e.title.split(/[／/、,]/)).map((t) => t.trim()).filter(Boolean);
   // 「(勤務先の頭2文字)出勤」の予定があればその勤務先(いつもの曜日でなくても)
   for (const k of Object.keys(WORK)) if (titles.some((t) => t.includes(k.slice(0, 2)) && t.includes("出勤"))) return { place: k, manual: false, why: "出勤の予定" };
   if (!place) return { place: "", manual: false, why: "" };
-  const hol = calData.holidays.find((h) => h.date === day);
+  const hol = data.holidays.find((h) => h.date === day);
   if (hol) return { place: "", manual: false, why: `祝日(${hol.title})` };
   // 題が「仕事休み」「夏休み」などで始まる予定は全部休み(「○○さん夏休み」のような人の予定は数えない)。「(勤務先の頭2文字)休み」はその勤務先だけ休み
   const off = titles.find((t) => /^(仕事休み|夏休み|冬休み|正月休み|年末年始|お盆休み|休診|休み$)/.test(t) || (t.includes(place.slice(0, 2)) && t.includes("休")));
@@ -2255,7 +2437,7 @@ $("calList").addEventListener("click", (e) => {
 $("calListToggle").onclick = () => { calListOn = !calListOn; store.set("hisho:calList", calListOn); renderCal(); };
 
 // その日の「チェックで消すもの」:Googleのタスクと、期限がその日のアプリのToDo(todo: true)
-const dayTasks = (day) => [...(calData.tasks || []).filter((t) => t.date === day), ...(calData.todos || []).filter((t) => t.date === day).map((t) => ({ ...t, todo: true }))];
+const dayTasks = (day, data = calData) => [...(data.tasks || []).filter((t) => t.date === day), ...(data.todos || []).filter((t) => t.date === day).map((t) => ({ ...t, todo: true }))];
 function openDay(day) {
   dayOpen = day;
   $("dayTitle").textContent = md(day);
@@ -2264,7 +2446,7 @@ function openDay(day) {
   const evs = calData.events.filter((e) => e.date <= day && (e.end_date || e.date) >= day).sort((a, b) => (a.start || "").localeCompare(b.start || ""));
   const tasks = dayTasks(day);
   $("dayList").innerHTML = hol.map((h) => `<div class="dayev"><b class="h">${esc(h.title)}</b><small>祝日</small></div>`).join("") +
-    (evs.length ? evs.map((e) => `<div class="dayev" data-id="${esc(e.id)}"><b>${e.repeat ? "🔁 " : ""}${esc(e.title)}</b><small>${esc([timeText(e), e.calName && "📗" + e.calName, e.place && "📍" + e.place, e.note].filter(Boolean).join("・"))}</small></div>`).join("") : hol.length || tasks.length ? "" : `<div class="muted" style="padding:10px 0">予定はありません</div>`) +
+    (evs.length ? evs.map((e) => `<div class="dayev${e.both ? " fam" : ""}" data-id="${esc(e.id)}"><b>${e.repeat ? "🔁 " : ""}${esc(e.title)}</b><small>${esc([timeText(e), e.both ? "自分・家族の両方に入っています" : e.calName && "📗" + e.calName, e.same > 1 && `同じ予定が${e.same}つ入っています(Googleカレンダーで片方を消せます)`, e.place && "📍" + e.place, e.note].filter(Boolean).join("・"))}</small></div>`).join("") : hol.length || tasks.length ? "" : `<div class="muted" style="padding:10px 0">予定はありません</div>`) +
     tasks.map((t) => `<label class="dayev task${t.todo ? " todo" : ""}${t.done ? " done" : ""}" data-task="${esc(t.id)}"${t.todo ? " data-todo" : ""}><input type="checkbox" ${t.done ? "checked" : ""}><span><b>${esc(t.title)}</b><small>${t.todo ? (t.gtask ? "ToDo(Googleのタスクにも入っています)" : "ToDo") : "Googleのタスク" + (t.note ? "・" + esc(t.note) : "")}</small></span></label>`).join("");
   if (!$("dayDlg").open) $("dayDlg").showModal();
 }
