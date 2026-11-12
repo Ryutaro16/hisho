@@ -644,7 +644,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "e9f3898586c2362f58111aeee5ad49bad1fde3ba";
+const BUILD = "b7a14d467aa3ee66960b953dfe11c4dfcc942ad3";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -1377,7 +1377,7 @@ function rowHtml(it, mode = view) {
   const sub = [it.area, it.kind, it.person && "👤" + it.person, it.due && `<span class="due">期限 ${md(it.due)}</span>`, det, mode !== "todo" && it.item_date && md(it.item_date)].filter(Boolean);
   const done = it.status === "完了" || doneWait.has(String(it.id));
   // まだのToDoだけ「期限を動かす」(期限のない行には「期限なし」を出さない)
-  const snz = op && it.category === "ToDo" && !done ? `<div class="snz">期限を動かす</div><div class="xpb snzb"><button class="xsnz" data-to="1">明日へ</button><button class="xsnz" data-to="7">来週へ</button>${it.due ? `<button class="xsnz" data-to="">期限なし</button>` : ""}</div>` : "";
+  const snz = op && it.category === "ToDo" && !done ? `<div class="snz">期限を動かす</div><div class="xpb snzb"><button class="xsnz" data-to="1">明日へ</button><button class="xsnz" data-to="7">来週へ</button><button class="xsnz" data-to="m">来月へ</button>${it.due ? `<button class="xsnz" data-to="">期限なし</button>` : ""}</div>` : "";
   const xp = op ? `<div class="xp">${dl.length ? `<ul>${dl.map((l) => `<li>${esc(l.replace(/^[・\-*]\s*/, ""))}</li>`).join("")}</ul>` : ""}${snz}<div class="xpb"><button class="xedit">✏️ 修正する</button><button class="xcopy">📋 コピー</button><button class="xclose">▴ 閉じる</button></div></div>` : "";
   return `<div class="lrow${done ? " done" : ""}${over ? " over" : ""}${op ? " open" : ""}" data-id="${it.id}">
     ${CHECKABLE.includes(it.category) && !done ? `<span class="star${it.focused ? " on" : ""}" role="button" aria-label="今やることに入れる">${it.focused ? "★" : "☆"}</span>` : ""}
@@ -1522,9 +1522,16 @@ for (const box of ["list", "home"]) {
     row.outerHTML = rowHtml(it, box === "list" ? view : row.closest(".fam") ? "family" : "todo");
   });
 }
-// ToDoの期限を動かす(明日へ=今日の次の日、来週へ=今日から7日後、期限なし)。日付は端末の今日から数える。
+// ToDoの期限を動かす(明日へ=今日の次の日、来週へ=今日から7日後、来月へ=1か月後の同じ日、期限なし)。日付は端末の今日から数える。
 // 呼び方は項目を直すときと同じなので、Googleのタスクの期限も今の仕組みで一緒に動く。4秒は「取り消す」で元の期限に戻せる
-const snoozeDue = (to, today = todayStr()) => (to === "" ? "" : addDays(today, Number(to)));
+// 来月へ:1/31 のように来月にない日は、来月の末日にする(3月に飛ばないように)
+function addMonth(today) {
+  const [y, m, d] = today.split("-").map(Number);
+  const last = new Date(y, m + 1, 0).getDate(); // 来月の末日
+  const t = new Date(y, m, Math.min(d, last));
+  return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`;
+}
+const snoozeDue = (to, today = todayStr()) => (to === "" ? "" : to === "m" ? addMonth(today) : addDays(today, Number(to)));
 async function snooze(it, to) {
   const prev = it.due || "", due = snoozeDue(to);
   try {
