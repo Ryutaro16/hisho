@@ -121,6 +121,22 @@
   .mini { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:10px; font-size:13px; color:var(--sub); text-align:left; min-height:0; }
   .mini b { display:block; font-size:15px; color:var(--ink); }
   .mini .n { font-size:22px; font-weight:700; color:var(--ink); margin-right:4px; }
+  /* ⭐今やること:☆から3日以上たったものは薄くして「まだ今やる?」と聞く */
+  .lrow.stale > input, .lrow.stale > .star, .lrow.stale > .tx > span, .lrow.stale > .tx > small { opacity:.55; }
+  .fask { display:flex; align-items:center; flex-wrap:wrap; gap:4px 10px; margin-top:5px; font-size:12px; color:var(--sub); }
+  .fask button { min-height:30px; padding:2px 12px; font-size:13px; border-radius:15px; }
+  .fask .xrenew { border-color:#f0b429; }
+  .fask .fbtns { display:flex; gap:8px; }
+  /* ✅ ToDoの見出しの「今週 ✔○」(押すと完了も見える一覧へ) */
+  .wgt .donewk { margin-left:8px; color:var(--ok); font-size:13px; font-weight:700; }
+  /* 🔍 全部をまとめて探す */
+  .hdbtns { display:flex; gap:8px; }
+  #findList .group h3 { display:flex; justify-content:space-between; align-items:baseline; }
+  #findList .lrow.done .tx > span { text-decoration:line-through; color:var(--sub); }
+  .findnote { color:var(--sub); font-size:13px; margin:2px 2px 8px; }
+  /* メモを直す欄 */
+  #mdBody .mdedit input, #mdBody .mdedit textarea { font-size:16px; padding:7px 9px; }
+  #memoDlg .row-btns { gap:6px; flex-wrap:nowrap; } #memoDlg .row-btns button { flex:1 1 auto; padding:10px 6px; white-space:nowrap; }
   .star { font-size:20px; color:#c8ced4; flex:none; cursor:pointer; line-height:1.1; user-select:none; }
   .star.on { color:#f0b429; }
   .back { font-size:17px; color:var(--acc); padding:6px 0; }
@@ -500,7 +516,7 @@
 
   <!-- 🏠 ホーム(一画面で見渡す。各枠の「すべて」で下の一覧へ) -->
   <div id="pageHome" hidden>
-    <header><h1 id="homeDate"></h1><button class="link" id="openSettings" aria-label="設定" style="font-size:22px">⚙</button></header>
+    <header><h1 id="homeDate"></h1><span class="hdbtns"><button class="link" id="openFind" aria-label="全部から探す" style="font-size:20px">🔍</button><button class="link" id="openSettings" aria-label="設定" style="font-size:22px">⚙</button></span></header>
     <div id="homeToday"></div>
     <div id="home"></div>
   </div>
@@ -516,6 +532,14 @@
     <button class="link histbtn" data-hist="askmemo">🕘 前に聞いたこと ›</button>
     <div id="maskAns" class="askans" hidden></div>
     <div id="memoList"></div>
+  </div>
+
+  <!-- 🔍 全部をまとめて探す(ホームの🔍から。項目の全分野と話したメモ。AIなし・0円) -->
+  <div id="pageSearch" hidden>
+    <header><button class="link back" data-back="pageHome">‹ ホーム</button><h1>探す</h1><span></span></header>
+    <div class="searchbox"><input id="findQ" type="search" placeholder="🔍 ToDo・アイデア・記録・メモをまとめて検索" enterkeyhint="search" autocomplete="off"></div>
+    <div class="findnote" id="findNote">空白で区切ると、すべての言葉を含むものを探します(完了・しまったものも)</div>
+    <div id="findList"></div>
   </div>
 
   <!-- 📋 一覧(ホームの「すべて」から。分野ごと。ToDoは期限ごと) -->
@@ -641,7 +665,8 @@
   <h3 id="mdTitle"></h3>
   <div class="muted" id="mdDate"></div>
   <div id="mdBody"></div>
-  <div class="row-btns"><button class="main" id="mdCopy">📋 コピー</button><button id="mdClose">閉じる</button><button class="danger" id="mdDel" hidden>削除</button></div>
+  <div class="row-btns" id="mdBtns"><button class="main" id="mdCopy">📋 コピー</button><button id="mdEdit" hidden>✏️ 直す</button><button id="mdClose">閉じる</button><button class="danger" id="mdDel">削除</button></div>
+  <div class="row-btns" id="mdEditBtns" hidden><button class="main" id="mdSave">保存</button><button id="mdCancel">やめる</button></div>
 </dialog>
 
 <div id="toast"></div>
@@ -651,7 +676,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "7253614ab0f758842fb2860d3d6304057be03ee5";
+const BUILD = "b383be99f9a170669d82dcf2a8cc86b4c5078fb6";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -700,8 +725,8 @@ function md(s) {
 }
 
 // ---- ページの切り替え。一覧(pageList)と設定(pageSet)はホームから開くので、タブはホームを光らせる ----
-const TAB_OF = { pageList: "pageHome", pageSet: "pageHome", pageLeave: "pageCal", pageNote: "pageHome", pageCost: "pageHome", pageAsks: "pageMemo" };
-const PAGES = ["pageSpeak", "pageHome", "pageCal", "pageMemo", "pageMorning", "pageList", "pageSet", "pageLeave", "pageNote", "pageCost", "pageAsks"];
+const TAB_OF = { pageSearch: "pageHome", pageList: "pageHome", pageSet: "pageHome", pageLeave: "pageCal", pageNote: "pageHome", pageCost: "pageHome", pageAsks: "pageMemo" };
+const PAGES = ["pageSpeak", "pageHome", "pageCal", "pageMemo", "pageMorning", "pageList", "pageSet", "pageLeave", "pageNote", "pageCost", "pageAsks", "pageSearch"];
 // 設定や一覧の中から開くページ(戻ると、その親のページへ。積んだ履歴はそのまま)
 const PARENT = { pageCost: "pageSet" };
 // 一覧・設定を開いたら履歴を1つ積む。Safari の「戻る」スライドや、下の左端スライドで戻れるようにするため
@@ -727,6 +752,7 @@ function showPage(page, fromPop = false) {
   if (page === "pageSpeak") requestAnimationFrame(growAll);
   if (page === "pageCost") { TAB_OF.pageCost = TAB_OF.pageSet; renderCost(); }
   if (page === "pageAsks") loadAsks();
+  if (page === "pageSearch") { runFind(); $("findQ").focus(); }
 }
 for (const b of document.querySelectorAll("nav.tabs button")) b.onclick = () => showPage(b.dataset.page);
 for (const b of document.querySelectorAll("[data-back]")) b.onclick = goBack;
@@ -1375,7 +1401,13 @@ const todayStr = () => ymd(new Date());
 const weekEnd = () => { const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7)); return ymd(d); };
 // その場で開いている行(押すと開く・もう一度押すと閉じる)
 const openRows = new Set();
+// ⭐今やること:☆を付けてから何日たったか(ホームの今やることの枠では mode を "focus" にする)
+const FOCUS_ASK_DAYS = 3;
+const focusDays = (it) => (it.focused_at ? Math.floor((Date.now() - Date.parse(it.focused_at)) / 864e5) : 0);
+const modeOf = (row, box) => (box === "list" ? view : row.closest(".fam") ? "family" : row.closest(".now") ? "focus" : "todo");
 function rowHtml(it, mode = view) {
+  const stale = mode === "focus" && it.focused && it.status !== "完了" && focusDays(it) >= FOCUS_ASK_DAYS;
+  if (mode === "focus") mode = "todo";
   const over = it.status !== "完了" && it.due && it.due < todayStr();
   const dl = detailLines(it.detail);
   // くわしくが2行以上なら「中身N件」、1行なら短く
@@ -1386,10 +1418,11 @@ function rowHtml(it, mode = view) {
   // まだのToDoだけ「期限を動かす」(期限のない行には「期限なし」を出さない)
   const snz = op && it.category === "ToDo" && !done ? `<div class="snz">期限を動かす</div><div class="xpb snzb"><button class="xsnz" data-to="1">明日へ</button><button class="xsnz" data-to="7">来週へ</button><button class="xsnz" data-to="m">来月へ</button>${it.due ? `<button class="xsnz" data-to="">期限なし</button>` : ""}</div>` : "";
   const xp = op ? `<div class="xp">${dl.length ? `<ul>${dl.map((l) => `<li>${esc(l.replace(/^[・\-*]\s*/, ""))}</li>`).join("")}</ul>` : ""}${snz}<div class="xpb"><button class="xedit">✏️ 修正する</button><button class="xcopy">📋 コピー</button><button class="xclose">▴ 閉じる</button></div></div>` : "";
-  return `<div class="lrow${done ? " done" : ""}${over ? " over" : ""}${op ? " open" : ""}" data-id="${it.id}">
+  const ask = stale && !done ? `<div class="fask"><span>☆から${focusDays(it)}日・まだ今やる?</span><span class="fbtns"><button class="xrenew">続ける</button><button class="xunfocus">外す</button></span></div>` : "";
+  return `<div class="lrow${done ? " done" : ""}${over ? " over" : ""}${op ? " open" : ""}${stale && !done ? " stale" : ""}" data-id="${it.id}">
     ${CHECKABLE.includes(it.category) && !done ? `<span class="star${it.focused ? " on" : ""}" role="button" aria-label="今やることに入れる">${it.focused ? "★" : "☆"}</span>` : ""}
     ${CHECKABLE.includes(it.category) || it.category === "アイデア" ? `<input type="checkbox" ${done ? "checked" : ""} aria-label="完了">` : ""}
-    <div class="tx"><span>${esc(it.title)}</span>${sub.length ? `<small>${sub.map((x) => (x.startsWith("<") ? x : esc(x))).join("・")}</small>` : ""}${xp}</div>${doneWait.has(String(it.id)) ? `<span class="undo" role="button">もう一度押すと戻る</span>` : ""}</div>`;
+    <div class="tx"><span>${esc(it.title)}</span>${sub.length ? `<small>${sub.map((x) => (x.startsWith("<") ? x : esc(x))).join("・")}</small>` : ""}${ask}${xp}</div>${doneWait.has(String(it.id)) ? `<span class="undo" role="button">もう一度押すと戻る</span>` : ""}</div>`;
 }
 function group(title, items, cls = "") { return items.length ? `<div class="group"><h3 class="${cls}">${title} <small>${items.length}</small></h3>${items.map(rowHtml).join("")}</div>` : ""; }
 async function loadList() {
@@ -1465,7 +1498,7 @@ $("askAns").addEventListener("click", (e) => {
 
 // 今いる画面(ホームか一覧)を読み直す
 // (項目を直したあとなので、ホームの📅今日も間をあけずに読み直す)
-const refreshCurrent = () => (!$("pageHome").hidden ? ((todayFetchedAt = 0), loadHome()) : loadList());
+const refreshCurrent = () => (curPage === "pageSearch" ? runFind() : !$("pageHome").hidden ? ((todayFetchedAt = 0), loadHome()) : loadList());
 let homeCache = [];
 // □で完了にしたら4秒は取り消し線で残し、もう一度押せば戻す(2026-11-06 案B)。
 // 記録への保存は4秒たってから(Googleのタスク・奥さんへの「済みました」もそのとき)なので、取り消せば何も送らない
@@ -1479,7 +1512,7 @@ async function sendDone(id) {
 function undoDone(row, box) {
   const id = row.dataset.id;
   clearTimeout(doneWait.get(id)); doneWait.delete(id);
-  row.outerHTML = rowHtml(homeCache.concat(listItemsCache).find((i) => String(i.id) === id) || { id, title: row.querySelector(".tx > span").textContent, category: "ToDo" }, box === "list" ? view : row.closest(".fam") ? "family" : "todo");
+  row.outerHTML = rowHtml(homeCache.concat(listItemsCache).find((i) => String(i.id) === id) || { id, title: row.querySelector(".tx > span").textContent, category: "ToDo" }, modeOf(row, box));
 }
 // アプリを閉じる・ほかのアプリへ移るときは、待たずに保存する
 document.addEventListener("visibilitychange", () => { if (document.hidden) for (const id of [...doneWait.keys()]) sendDone(id); });
@@ -1493,6 +1526,7 @@ for (const box of ["list", "home"]) {
       doneWait.set(id, setTimeout(() => sendDone(id), DONE_WAIT));
       row.classList.add("done");
       row.querySelector(".star")?.remove();
+      row.querySelector(".fask")?.remove(); row.classList.remove("stale");
       row.insertAdjacentHTML("beforeend", `<span class="undo" role="button">もう一度押すと戻る</span>`);
       return;
     }
@@ -1505,6 +1539,15 @@ for (const box of ["list", "home"]) {
     // 「もう一度押すと戻る」の文字を押しても取り消す
     const undo = e.target.closest(".undo");
     if (undo) { const row = undo.closest(".lrow"); if (doneWait.has(row.dataset.id)) undoDone(row, box); return; }
+    // ☆から3日以上:「続ける」= ☆を付けた時刻を今に(また3日後まで聞かない)、「外す」= ☆を外す
+    const fk = e.target.closest(".xrenew, .xunfocus");
+    if (fk) {
+      const renew = fk.classList.contains("xrenew");
+      fk.disabled = true;
+      try { await post("/api/item", { action: "focus", id: fk.closest(".lrow").dataset.id, on: renew, renew }); toast(renew ? "今やることに残しました" : "今やることから外しました"); refreshCurrent(); }
+      catch (err) { fk.disabled = false; alert(err.message); }
+      return;
+    }
     const star = e.target.closest(".star");
     if (star) {
       const on = !star.classList.contains("on");
@@ -1526,7 +1569,7 @@ for (const box of ["list", "home"]) {
     }
     if (!it) return;
     if (openRows.has(id)) openRows.delete(id); else openRows.add(id);
-    row.outerHTML = rowHtml(it, box === "list" ? view : row.closest(".fam") ? "family" : "todo");
+    row.outerHTML = rowHtml(it, modeOf(row, box));
   });
 }
 // ToDoの期限を動かす(明日へ=今日の次の日、来週へ=今日から7日後、来月へ=1か月後の同じ日、期限なし)。日付は端末の今日から数える。
@@ -1761,14 +1804,15 @@ for (const b of document.querySelectorAll(".histbtn")) b.onclick = () => {
 };
 $("asksBack").onclick = goBack;
 let mdMemo = null;
-async function openMemo(id) {
+async function openMemo(id, words = searchWords()) {
+  mdEditOff();
   try {
     const { memo: m, items, ask } = await post("/api/memo", { id });
     mdMemo = m;
     const d = new Date(m.memo_at);
     $("mdTitle").textContent = m.title;
     $("mdDate").textContent = `${md(ymd(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    $("mdDel").hidden = !ask;
+    $("mdEdit").hidden = !!ask; // 秘書の答えは直さない(削除だけ)
     if (ask) {
       // 秘書の答え:質問・答え・もとにしたもの(メモなら押すと開く)
       $("mdDate").textContent += `・🤖 秘書の答え(${ASK_KIND[ask.kind] || ""}・${yenText(ask.yen)})`;
@@ -1787,20 +1831,55 @@ async function openMemo(id) {
       `<details style="margin-top:10px"><summary class="muted">元の話し言葉</summary><div class="memo-body muted">${esc(m.said)}</div></details>`;
     // コピーするのは、人に送れる形の「題・要点・本文」(仕分けた項目と話し言葉は入れない。〘〙の印は外す)
     memoCopyText = [m.title, sum.length ? sum.map((x) => "・" + x).join("\n") : "", String(m.body || "").replace(/[〘〙]/g, "")].filter(Boolean).join("\n\n");
-    markHits($("memoDlg"));
+    markHits($("mdBody"), words);
     if (!$("memoDlg").open) $("memoDlg").showModal();
   } catch (e) { alert(e.message); }
 }
+// ✏️ 直す:題・要点(1行に1つ)・本文・タグを欄に。話した元の言葉は直さない
+let mdEditing = false, mdSnap = "";
+const mdeFields = () => ["mdeTitle", "mdeSum", "mdeBody", "mdeTags"].map((k) => $(k)?.value ?? "").join("\n");
+function mdEditOff() { mdEditing = false; $("mdBtns").hidden = false; $("mdEditBtns").hidden = true; }
+$("mdEdit").onclick = () => {
+  const m = mdMemo; if (!m) return;
+  const sum = JSON.parse(m.summary || "[]"), tags = JSON.parse(m.tags || "[]");
+  mdEditing = true;
+  // 本文の〘推測〙の印は欄では外して見せる(直さずに保存したときは印のまま残す)
+  $("mdBody").innerHTML = `<div class="mdedit"><div class="lbl">タイトル</div><input id="mdeTitle" value="${esc(m.title)}">` +
+    `<div class="lbl">要点 <small>(1行に1つ)</small></div><textarea id="mdeSum" rows="3">${esc(sum.join("\n"))}</textarea>` +
+    `<div class="lbl">本文</div><textarea id="mdeBody" rows="8">${esc(String(m.body || "").replace(/[〘〙]/g, ""))}</textarea>` +
+    `<div class="lbl">タグ <small>(読点「、」で区切る)</small></div><input id="mdeTags" value="${esc(tags.join("、"))}"></div>`;
+  for (const t of $("mdBody").querySelectorAll("textarea")) { grow(t); t.addEventListener("input", () => grow(t)); }
+  $("mdBtns").hidden = true; $("mdEditBtns").hidden = false;
+  mdSnap = mdeFields();
+};
+$("mdCancel").onclick = () => { if (mdeFields() === mdSnap || confirm("直したところを捨てますか?")) openMemo(mdMemo.id, []); };
+$("mdSave").onclick = async () => {
+  const m = mdMemo, title = $("mdeTitle").value.trim();
+  if (!title) { alert("タイトルを入れてください"); return; }
+  const bodyIn = $("mdeBody").value;
+  const body = bodyIn === String(m.body || "").replace(/[〘〙]/g, "") ? m.body : bodyIn;
+  $("mdSave").disabled = true;
+  try {
+    await post("/api/memo", { action: "update", id: m.id, title, body, summary: lines($("mdeSum").value), tags: $("mdeTags").value.split(/[、,，]/).map((x) => x.trim()).filter(Boolean) });
+    await openMemo(m.id, []);
+    toast("メモを直しました");
+    if (curPage === "pageMemo") loadMemos(); else if (curPage === "pageSearch") runFind();
+  } catch (e) { alert(e.message); }
+  $("mdSave").disabled = false;
+};
+$("memoDlg").addEventListener("close", mdEditOff);
 let memoCopyText = "";
 $("mdClose").onclick = () => $("memoDlg").close();
 // 秘書の答えの「もとにしたメモ」を押すと、そのメモに切り替える
 $("mdBody").addEventListener("click", (e) => { const r = e.target.closest(".lrow[data-ref]"); if (r) openMemo(r.dataset.ref); });
 $("mdDel").onclick = async () => {
-  if (!mdMemo || !confirm(`この秘書の答えを削除します。(30日間は⚙設定のゴミ箱から戻せます)`)) return;
+  if (!mdMemo) return;
+  const isAsk = !!ASK_KIND[mdMemo.source];
+  if (!confirm(isAsk ? `この秘書の答えを削除します。(30日間は⚙設定のゴミ箱から戻せます)` : `このメモを削除します。仕分けた項目は残ります。(30日間は⚙設定のゴミ箱から戻せます)`)) return;
   try {
-    await post("/api/asks", { action: "delete", id: mdMemo.id });
+    await post("/api/memo", { action: "delete", id: mdMemo.id });
     $("memoDlg").close(); toast("削除しました");
-    if (curPage === "pageAsks") loadAsks(); else if (curPage === "pageMemo") loadMemos();
+    if (curPage === "pageAsks") loadAsks(); else if (curPage === "pageMemo") loadMemos(); else if (curPage === "pageSearch") runFind();
   } catch (e) { alert(e.message); }
 };
 
@@ -1826,7 +1905,10 @@ for (const id of ["memoDlg", "dayDlg"]) {
   $(id).addEventListener("click", (e) => {
     if (e.target !== $(id)) return;
     const r = $(id).getBoundingClientRect();
-    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) $(id).close();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) {
+      if (id === "memoDlg" && mdEditing && mdeFields() !== mdSnap && !confirm("直したところを保存せずに閉じますか?")) return;
+      $(id).close();
+    }
   });
 }
 async function copyText(text, host = document.body) {
@@ -1883,8 +1965,8 @@ async function loadHome() {
       (famRows.length ? `<div class="wg fam"><div class="wgt"><span>${fam.icon} ${esc(fam.title)} ${famRows.length}</span><button data-open="family">すべて ›</button></div>${famRows.map((i) => rowHtml(i, "family")).join("")}</div>` : "") +
       (h.leave?.due ? `<button class="leavedue" data-leave>🌴 今月分の有給が、まだ記録されていません(残り${fmtDays(h.leave.left)}日) ›</button>` : "") +
       `<div class="wg now"><div class="wgt"><span>⭐ 今やること</span><button data-open="todo">選ぶ ›</button></div>` +
-      (h.focus.length ? rows(h.focus) : `<div class="empty">ToDoの☆を押すと、ここに入ります</div>`) + `</div>` +
-      `<div class="wg"><div class="wgt"><span>✅ ToDo</span><button data-open="todo">すべて ${h.todos.length} ›</button></div>` +
+      (h.focus.length ? h.focus.map((i) => rowHtml(i, "focus")).join("") : `<div class="empty">ToDoの☆を押すと、ここに入ります</div>`) + `</div>` +
+      `<div class="wg"><div class="wgt"><span>✅ ToDo${h.doneWeek ? `<button class="donewk" data-donewk aria-label="今週片付けたToDo">今週 ✔${h.doneWeek}</button>` : ""}</span><button data-open="todo">すべて ${h.todos.length} ›</button></div>` +
       (soonShow.length ? `<div class="g">期限切れ・今日・明日</div>${rows(soonShow)}` : "") +
       (weekShow.length ? `<div class="g">1週間以内</div>${rows(weekShow)}` : "") +
       (laterShow.length ? `<div class="g">それ以降・期限なし</div>${rows(laterShow)}` : "") +
@@ -1906,10 +1988,59 @@ async function loadHome() {
   } catch (e) { $("home").innerHTML = `<div class="soon">${esc(e.message)}</div>`; }
 }
 $("home").addEventListener("click", (e) => {
+  // 今週 ✔○:完了したものも見える ToDo の一覧へ
+  if (e.target.closest("[data-donewk]")) { $("showDone").checked = true; openList("todo"); return; }
   const b = e.target.closest("[data-open]");
   if (b) openList(b.dataset.open);
   if (e.target.closest("[data-note]")) showPage("pageNote");
 });
+// ---- 🔍 全部をまとめて探す(ホームの🔍から。AIなし・0円) ----
+// 項目(全分野・完了したものも)と話したメモを、空白で区切った言葉をすべて含むもので。分野ごとに新しい順・最大20件
+let findTimer = null, findCache = { items: [], memos: [] };
+const findWords = () => $("findQ").value.trim().split(/\s+/).filter(Boolean).slice(0, 5);
+async function runFind() {
+  const q = $("findQ").value.trim();
+  if (!q) { findCache = { items: [], memos: [] }; $("findList").innerHTML = ""; $("findNote").hidden = false; return; }
+  try {
+    const r = await post("/api/search", { q });
+    if (q !== $("findQ").value.trim()) return; // 打っている途中で変わった
+    findCache = r;
+    $("findNote").hidden = true;
+    const words = findWords(), lw = words.map((w) => w.toLowerCase());
+    const head = (ic, name, n, shown) => `<h3><span>${ic} ${esc(name)} <small>${n}件</small></span>${n > shown ? `<small>新しい${shown}件</small>` : ""}</h3>`;
+    // 分野の並びは設定の順(予定・設定にない分野は後ろ)
+    const cats = [...new Set(r.items.map((i) => i.category))].sort((a, b) => (CATEGORIES.indexOf(a) + 1 || 99) - (CATEGORIES.indexOf(b) + 1 || 99));
+    let html = cats.map((c) => {
+      const list = r.items.filter((i) => i.category === c);
+      return `<div class="group">${head(ICON[c] || (c === "予定" ? "📅" : "📄"), c, r.counts[c] || list.length, list.length)}` + list.map((it) => {
+        // くわしくは、言葉を含む行(なければ1行目)を短く
+        const dl = detailLines(it.detail).map((l) => l.replace(/^[・\-*]\s*/, "")), hit = dl.find((l) => lw.some((w) => l.toLowerCase().includes(w))) || dl[0] || "";
+        const sub = [it.status === "完了" && (c === "覚えておくこと" ? "しまった" : "完了"), it.due && `期限 ${md(it.due)}`, hit && (hit.length > 40 ? hit.slice(0, 40) + "…" : hit), it.item_date && md(it.item_date)].filter(Boolean);
+        return `<div class="lrow${it.status === "完了" ? " done" : ""}" data-fitem="${it.id}"><div class="tx"><span>${esc(it.title)}</span>${sub.length ? `<small>${sub.map(esc).join("・")}</small>` : ""}</div></div>`;
+      }).join("") + `</div>`;
+    }).join("");
+    if (r.memos.length) html += `<div class="group">${head("📝", "メモ", r.memoCount, r.memos.length)}` + r.memos.map((m) => {
+      const d = new Date(m.memo_at), sum = JSON.parse(m.summary || "[]"), shown = (m.title + (sum[0] || "")).toLowerCase();
+      const ln = m.snippet && !lw.some((w) => shown.includes(w)) ? m.snippet : sum[0] || "";
+      return `<div class="lrow" data-memo="${m.id}"><div class="tx"><span>${esc(m.title)}</span><small>${md(ymd(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}${ln ? "・" + esc(ln) : ""}</small></div></div>`;
+    }).join("") + `</div>`;
+    $("findList").innerHTML = html || `<div class="soon">「${esc(q)}」は見つかりませんでした</div>`;
+    for (const tx of $("findList").querySelectorAll(".tx")) markHits(tx, words);
+  } catch (e) { $("findList").innerHTML = `<div class="soon">${esc(e.message)}</div>`; }
+}
+$("findQ").addEventListener("input", () => { clearTimeout(findTimer); findTimer = setTimeout(runFind, 300); });
+$("openFind").onclick = () => showPage("pageSearch");
+$("findList").addEventListener("click", (e) => {
+  const m = e.target.closest(".lrow[data-memo]");
+  if (m) return openMemo(m.dataset.memo, findWords());
+  const r = e.target.closest(".lrow[data-fitem]");
+  const it = r && findCache.items.find((i) => String(i.id) === r.dataset.fitem);
+  if (!it) return;
+  // 予定はカレンダー(Google)が正本なので、ここでは直さず、話したメモがあればそれを開く
+  if (it.category === "予定") return it.memo_id ? openMemo(it.memo_id, findWords()) : toast("予定はカレンダーで直せます");
+  openItem(it);
+});
+
 // 設定はホームと話す画面の右上から開く。戻る先(と下のタブの光り方)は開いた画面にする
 function openSettings(from) {
   TAB_OF.pageSet = from;
