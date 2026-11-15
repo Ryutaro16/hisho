@@ -394,7 +394,7 @@
         <!-- 「audio/*」だと iPhone が写真・ビデオのメニューを先に出すので、拡張子だけにして「ファイル」を直接開く -->
         <input type="file" id="fileIn" accept=".m4a,.mp3,.wav,.aac" hidden>
         <div id="recStatus" class="hint"></div>
-        <!-- 高精度で録音の文字起こしの会社(⚙設定と同じ値)。ふだんはオフ=OpenAI -->
+        <!-- 高精度で録音の文字起こしの会社(⚙設定と同じ値)。ふだんはオン=Groq、オフで OpenAI -->
         <label class="ailine" id="sttLine"><span id="sttLbl">文字起こし節約(Groq・1分 約0.1円)</span><input type="checkbox" class="aiswitch" id="sttSave" role="switch"><span id="sttNote"></span></label>
       </div>
       <textarea id="input" placeholder="予定・ToDo・思いついたことなど、自由に話してください。聞き間違いや「えー」はそのままでOK。&#10;例:「明日は洗車をする。来週の水曜14時から税理士さんと打ち合わせ…」"></textarea>
@@ -595,7 +595,7 @@
     <select id="aiModel"><option value="opus">Opus(精度重視・1回 約4〜5円)</option><option value="sonnet">Sonnet(節約・1回 約2円)</option></select>
     <p class="muted">Sonnet は費用が約半分で速いが、分野の違う話までまとめたり、確認の説明を誤ったりすることがときどきあります。</p>
     <label for="sttPick">文字起こし(高精度で録音・音声ファイル・秘書に聞くの🎙)</label>
-    <select id="sttPick"><option value="openai">OpenAI(精度重視・1分 約0.7円)</option><option value="groq">Groq(節約・1分 約0.1円)</option></select>
+    <select id="sttPick"><option value="groq">Groq(ふだん・節約・1分 約0.1円)</option><option value="openai">OpenAI(精度重視・1分 約0.7円)</option></select>
     <p class="muted">Groq は費用が約7分の1。聞き間違いが少し増え、黙っている所で話していない言葉を作ることがあります。</p>
     <label for="clearMin">保存していない話した内容を、触らずに何分たったら消すか</label>
     <select id="clearMin"><option value="0">消さない</option><option value="10">10分</option><option value="30">30分</option><option value="60">60分</option><option value="180">3時間</option></select>
@@ -682,7 +682,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "391e32e99651bcc6e1a8764d8925d422d567fe67";
+const BUILD = "f66db5c6b5564332ff0fa82addbe198cab4d20cc";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -710,6 +710,9 @@ const store = {
 // 音声カルテ・音声メモと同じ住所(ryutaro16.github.io)なので、名前に「hisho:」を付けて分ける。
 // 合言葉は同じなので、まだ入れていなければ音声メモ・音声カルテで入れたものを使う
 let settings = store.get("hisho:settings") || { pass: store.get("memo:settings")?.pass || store.get("settings")?.pass || "", api: "" };
+// 2026-11-15 文字起こしはふだん Groq(節約)。前に OpenAI のまま保存していた端末も1回だけ Groq にそろえる
+if (!settings.sttDef) { settings = { ...settings, stt: "groq", sttDef: 1 }; store.set("hisho:settings", settings); }
+const sttNow = () => (settings.stt === "openai" ? "openai" : "groq");
 // 書きかけ:話した内容・話し始めた日時・まとめ(予定と仕分けは on で選ぶ)・保存結果
 const emptyDraft = () => ({ input: "", startedAt: null, memo: null, meta: "", saved: null, stt: 0 });
 let draft = store.get("hisho:draft") || emptyDraft();
@@ -754,7 +757,7 @@ function showPage(page, fromPop = false) {
   if (page === "pageNote") loadNote();
   if (page === "pageMemo") loadMemos();
   if (page === "pageMorning") { loadReport(listenDate || undefined); loadWeather(); loadLeave(); } // 聞いている日があればその日のまま
-  if (page === "pageSet") { $("pass").value = settings.pass || ""; $("api").value = settings.api || ""; $("device").value = settings.device || ""; $("clearMin").value = String(settings.clearMin ?? 60); $("aiModel").value = settings.model || "opus"; $("sttPick").value = settings.stt === "groq" ? "groq" : "openai"; loadUsage(); loadTrash(); loadLineUsers(); }
+  if (page === "pageSet") { $("pass").value = settings.pass || ""; $("api").value = settings.api || ""; $("device").value = settings.device || ""; $("clearMin").value = String(settings.clearMin ?? 60); $("aiModel").value = settings.model || "opus"; $("sttPick").value = sttNow(); loadUsage(); loadTrash(); loadLineUsers(); }
   if (page === "pageSpeak") requestAnimationFrame(growAll);
   if (page === "pageCost") { TAB_OF.pageCost = TAB_OF.pageSet; renderCost(); }
   if (page === "pageAsks") loadAsks();
@@ -944,7 +947,7 @@ function renderMeta(m) {
   if (!m) { el.textContent = ""; return; }
   const yen = (v) => `約${v.toFixed(1)}円`;
   const rows = [];
-  if (m.stt) rows.push(["文字起こし(OpenAI)", yen(m.stt)]);
+  if (m.stt) rows.push(["文字起こし", yen(m.stt)]);
   rows.push([`まとめ(${m.model})`, `${yen(m.yen)}・${m.sec.toFixed(1)}秒`]);
   let html = rows.map(([k, v]) => `<div><span>${esc(k)}</span><span>${v}</span></div>`).join("");
   html += `<div class="sum"><span>合計</span><span>${yen((m.stt || 0) + m.yen)}</span></div>`;
@@ -1107,7 +1110,7 @@ function paintTiles() {
   if (srOn) tile("srBtn", "■", `止める ${mmss(Date.now() - srT0)}`, "聞いています…(0円)", true);
   else tile("srBtn", "🎙", more ? "続けて話す" : "0円で話す", "iPhoneの音声認識\n始めにピコと鳴ります"); // ピコは iPhone が鳴らす音で、マナーモードでも消せない
   $("sttSave").disabled = !!recording; // 録音中は切り替えない(途中で会社が変わらないように)
-  const price = settings.stt === "groq" ? "1分 約0.1円(Groq)" : "1分 約0.7円";
+  const price = sttNow() === "groq" ? "1分 約0.1円(Groq)" : "1分 約0.7円";
   if (recording) tile("recBtn", "■", `止める ${mmss(Date.now() - recStart)}`, `録音中・${price}`, true);
   else tile("recBtn", "●", more ? "続けて録音" : "高精度で録音", `${price}\n音は鳴りません`);
 }
@@ -1321,7 +1324,7 @@ async function sendOne(blob) {
   let data = null, err = "";
   for (let i = 0; i < 3 && !data; i++) {
     try {
-      const res = await fetch((settings.api || DEFAULT_API).replace(/\/$/, "") + "/api/transcribe?stt=" + (settings.stt === "groq" ? "groq" : "openai") + (blob.rec ? "&rec=1" : ""), {
+      const res = await fetch((settings.api || DEFAULT_API).replace(/\/$/, "") + "/api/transcribe?stt=" + sttNow() + (blob.rec ? "&rec=1" : ""), {
         method: "POST", headers: { "Content-Type": blob.type.split(";")[0], "X-Passphrase": settings.pass || "", "X-Device": encodeURIComponent(settings.device || "") }, body: blob,
       });
       const d = await res.json().catch(() => ({ error: `サーバーの応答を読めませんでした(${res.status})` }));
@@ -1736,7 +1739,7 @@ async function micByRecording(btn, id) {
     micNote(id, "文字にしています…");
     const blob = new Blob(parts, { type: rec.mimeType || type });
     try {
-      const res = await fetch((settings.api || DEFAULT_API).replace(/\/$/, "") + "/api/transcribe?for=ask&stt=" + (settings.stt === "groq" ? "groq" : "openai"), {
+      const res = await fetch((settings.api || DEFAULT_API).replace(/\/$/, "") + "/api/transcribe?for=ask&stt=" + sttNow(), {
         method: "POST", headers: { "Content-Type": blob.type.split(";")[0], "X-Passphrase": settings.pass || "", "X-Device": encodeURIComponent(settings.device || "") }, body: blob,
       });
       const d = await res.json().catch(() => ({ error: `サーバーの応答を読めませんでした(${res.status})` }));
@@ -2779,12 +2782,12 @@ $("aiSave").onchange = () => {
   renderAiPick();
 };
 renderAiPick();
-// 話す画面の「文字起こし節約」切り替え(⚙設定と同じ値。この端末に覚える)。ふだんはオフ=OpenAI
+// 話す画面の「文字起こし節約」切り替え(⚙設定と同じ値。この端末に覚える)。ふだんはオン=Groq
 function renderSttPick() {
-  const on = settings.stt === "groq";
+  const on = sttNow() === "groq";
   $("sttSave").checked = on;
   $("sttLbl").textContent = on ? "文字起こし節約 オン(Groq)" : "文字起こし節約(Groq・1分 約0.1円)";
-  $("sttNote").textContent = on ? "聞き間違いが少し増えます" : "";
+  $("sttNote").textContent = on ? "聞き間違いが多いときはオフ=OpenAI(1分 約0.7円)" : "オフ=OpenAI(精度重視・1分 約0.7円)";
   $("sttLine").classList.toggle("on", on);
   paintTiles();
 }
@@ -2794,7 +2797,7 @@ $("sttSave").onchange = () => {
   renderSttPick();
 };
 renderSttPick();
-$("saveSettings").onclick = () => { settings = { pass: $("pass").value, api: $("api").value.trim(), device: $("device").value.trim(), clearMin: Number($("clearMin").value), model: $("aiModel").value, stt: $("sttPick").value }; renderAiPick(); renderSttPick(); store.set("hisho:settings", settings); toast("保存しました"); loadUsage(); loadProfile(); };
+$("saveSettings").onclick = () => { settings = { pass: $("pass").value, api: $("api").value.trim(), device: $("device").value.trim(), clearMin: Number($("clearMin").value), model: $("aiModel").value, stt: $("sttPick").value, sttDef: 1 }; renderAiPick(); renderSttPick(); store.set("hisho:settings", settings); toast("保存しました"); loadUsage(); loadProfile(); };
 
 const yenText = (v) => `約${v < 100 ? v.toFixed(1) : Math.round(v).toLocaleString()}円`;
 const dateText = (iso) => { const d = new Date(iso); return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`; };
