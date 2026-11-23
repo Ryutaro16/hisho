@@ -329,6 +329,13 @@
   .evform input { padding:7px 9px; min-width:0; }
   button.danger { color:var(--ng); }
   /* ☀️ 気分・棚卸し・心の天気 */
+  .rates { display:flex; gap:6px; }
+  .rates button { flex:1; padding:4px 0; min-height:54px; line-height:1.25; }
+  .rates button b { display:block; font-size:20px; }
+  .rates button small { font-size:11.5px; }
+  .rates button.on, .whys button.on { background:#e8f1fb; color:#0b4f94; border-color:var(--acc); box-shadow:0 0 0 1px var(--acc); }
+  .whys { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+  .whys button { font-size:14px; min-height:36px; padding:2px 10px; }
   .moods { display:flex; gap:6px; }
   .moods button { flex:1; font-size:26px; padding:4px 0; min-height:50px; }
   .moods button.on { background:#e8f1fb; border-color:var(--acc); box-shadow:0 0 0 1px var(--acc); }
@@ -459,6 +466,16 @@
       </div>
       <div class="hint"><span>欄の中は直接直せます。直してから保存してください。</span></div>
     </section>
+    <div class="card" id="rateCard" hidden>
+      <div class="sec"><span>このまとめはどうでしたか</span><small>押さなくてもよい</small></div>
+      <div class="rates" id="rateBtns"></div>
+      <div id="rateMore" hidden>
+        <div class="lbl">気になったところ <small>(いくつでも)</small></div>
+        <div class="whys" id="rateWhy"></div>
+        <textarea id="rateNote" rows="2" placeholder="一言(なくてもよい)"></textarea>
+        <div class="hint"><span id="rateState"></span></div>
+      </div>
+    </div>
     <div class="row-btns" id="nextRow" hidden><button class="main" id="next">次を話す</button></div>
   </div>
 
@@ -706,7 +723,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "5f25a8456d8d34c678a146b0da43eb2d80c756a9";
+const BUILD = "9aaabe3a1dc44ce6bc19e5be3dd3d312598384ac";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -1216,9 +1233,38 @@ function render() {
   for (const el of $("result").querySelectorAll("input, select, textarea")) el.disabled = saved;
   bodyBox.contentEditable = saved ? "false" : BODY_MODE;
   $("nextRow").hidden = !saved;
+  renderRate();
   if (saved) setStatus(savedText(draft.saved), draft.saved.warn ? "err" : "ok");
   recInfo();
 }
+// ---- 保存したあとの評価(押すとすぐ記録。もう一度押すと外れる) ----
+const RATES = [["◎", "そのまま"], ["○", "少し直した"], ["△", "かなり直した"], ["×", "使えない"]];
+const RATE_WHY = ["聞き間違い", "予定・日付", "分野の分け方", "抜け", "余計な付け足し", "長すぎ", "短すぎ", "言い回し", "要確認が多い"];
+function renderRate() {
+  const id = draft.saved?.memoId, r = draft.rate || { r: "", why: [], note: "" };
+  $("rateCard").hidden = !id;
+  if (!id) return;
+  $("rateBtns").innerHTML = RATES.map(([k, t]) => `<button data-r="${k}" class="${r.r === k ? "on" : ""}" aria-pressed="${r.r === k}"><b>${k}</b><small>${t}</small></button>`).join("");
+  $("rateWhy").innerHTML = RATE_WHY.map((w) => `<button data-w="${w}" class="${r.why.includes(w) ? "on" : ""}" aria-pressed="${r.why.includes(w)}">${w}</button>`).join("");
+  $("rateMore").hidden = !r.r;
+  if (document.activeElement !== $("rateNote")) $("rateNote").value = r.note;
+}
+let rateChain = Promise.resolve();
+function sendRate() {
+  saveDraft(); renderRate();
+  const d = draft, body = { action: "rate", memoId: d.saved.memoId, rating: d.rate.r, why: [...d.rate.why], note: d.rate.note };
+  $("rateState").textContent = "記録しています…";
+  // 続けて押しても、押した順に1つずつ送る
+  rateChain = rateChain.then(() => post("/api/eval", body)).then(() => { if (draft === d) $("rateState").textContent = "✓ 記録しました"; }, (e) => { if (draft === d) { $("rateState").textContent = ""; toast("評価を記録できませんでした:" + e.message); } });
+}
+$("rateCard").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b || !draft.saved?.memoId) return;
+  const r = (draft.rate ||= { r: "", why: [], note: "" });
+  if (b.dataset.r) r.r = r.r === b.dataset.r ? "" : b.dataset.r;
+  else if (b.dataset.w) r.why = r.why.includes(b.dataset.w) ? r.why.filter((x) => x !== b.dataset.w) : [...r.why, b.dataset.w];
+  sendRate();
+});
+$("rateNote").addEventListener("change", () => { if (draft.saved?.memoId && draft.rate) { draft.rate.note = $("rateNote").value.trim(); sendRate(); } });
 function savedText(r) {
   const p = [];
   if (r.events) p.push(`予定${r.events}件をGoogleカレンダーに`);
@@ -1302,7 +1348,7 @@ function save() {
     const E = evOf(), fin = JSON.parse(JSON.stringify({ title: m.title, summary: m.summary, body: m.body, tags: m.tags, items: m.items, events: m.events }));
     const ev = { v: 1, build: BUILD.slice(0, 8), segs: E.segs, runs: E.runs, acts: E.acts, savedAt: Date.now(), left: m.needs_check.filter((r) => !m.ck?.[r]), final: { ...fin, checks: m.needs_check.length } };
     const data = await post("/api/save", { ev, memo, how: draft.how, said: draft.input, iso: isoLocal(new Date(draft.startedAt || Date.now())), events, items });
-    draft.saved = { events: data.events, items: data.items, warn: data.warn || "" };
+    draft.saved = { memoId: data.memoId, events: data.events, items: data.items, warn: data.warn || "" };
     if (draft.mood) await post("/api/mood", { mood: draft.mood, date: ymd(new Date(draft.startedAt || Date.now())), memoId: data.memoId }).catch(() => {});
     saveDraft();
     toast("保存しました");
