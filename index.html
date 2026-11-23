@@ -700,7 +700,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "c2efa0a69506e2373a1e426f1475649407f0d329";
+const BUILD = "7be5ab1a2b07475b3149a3b209d097c8c109c4e2";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -1006,7 +1006,7 @@ function ckGet(id) {
 }
 function ckSet(id, v) {
   const [k, i, f] = id.split("."), m = draft.memo;
-  if (k === "summary") m.summary = v.split("\n"); else if (f) m[k][i][f] = v; else m[k] = v;
+  if (k === "summary") m.summary = v ? v.split("\n") : []; else if (f) m[k][i][f] = v; else m[k] = v;
 }
 function ckChange(list, id, v, part, once) { const old = ckGet(id); if (old !== v) { ckSet(id, v); list.push({ id, old, now: v, part, once }); } }
 // 言葉をまとめて置き換える(本文は〘〙の中も外も。2字以上のときだけ外も)
@@ -1025,6 +1025,10 @@ function ckBack(list) {
   for (const c of [...list].reverse()) {
     const cur = ckGet(c.id);
     if (cur === c.now) ckSet(c.id, c.old);
+    else if (c.del) {
+      const at = c.del.pre ? cur.indexOf(c.del.pre) : 0;
+      ckSet(c.id, at >= 0 ? cur.slice(0, at + c.del.pre.length) + c.del.text + cur.slice(at + c.del.pre.length) : cur.replace(/\n*$/, "\n") + c.del.text.trim());
+    }
     else if (c.part && c.part[1]) ckSet(c.id, c.once ? cur.replace(c.part[1], () => c.part[0]) : cur.split(c.part[1]).join(c.part[0]));
   }
 }
@@ -1066,6 +1070,51 @@ function ckDateTry(c, d) {
 // 日付を変えたとき、本文・題などの言い方(例「来週の水曜」)も日付に
 function ckReplaceAllShown(word, shown, list) { if (word.length >= 2) ckReplaceAll(word, shown, list); }
 
+// 「消す」:まず本文の、その言葉がある1文だけ。要点・仕分け・予定にもあれば「ほかからも消す」で選ぶ
+function ckSentence(body, word) {
+  let i = body.indexOf("〘" + word + "〙");
+  if (i < 0) i = word.length >= 2 ? body.indexOf(word) : -1;
+  if (i < 0) return null;
+  const a = Math.max(body.lastIndexOf("。", i), body.lastIndexOf("\n", i)) + 1;
+  const ends = [body.indexOf("。", i), body.indexOf("\n", i)].filter((x) => x >= 0);
+  let b = ends.length ? Math.min(...ends) : body.length;
+  if (body[b] === "。") b++;
+  return [a, b];
+}
+function ckDelBody(word, list) {
+  const body = ckGet("body"), r = ckSentence(body, word);
+  if (!r) return "";
+  let [a, b] = r;
+  const shown = body.slice(a, b).replace(/[〘〙]/g, "").trim();
+  // その行に何も残らないときは行ごと。話題(■)の中身が空になるときは見出しも消す
+  const lineStart = a === 0 || body[a - 1] === "\n", lineEnd = b === body.length || body[b] === "\n";
+  if (lineStart && lineEnd) {
+    const ls = body.lastIndexOf("\n", a - 2) + 1, head = a > 0 ? body.slice(ls, a - 1) : "";
+    const next = body.slice(b + 1);
+    if (head.startsWith("■") && (!next.trim() || next.trimStart().startsWith("■"))) a = ls;
+    if (b < body.length) b++; else if (a > 0) a--;
+  }
+  const now = body.slice(0, a) + body.slice(b);
+  ckSet("body", now);
+  list.push({ id: "body", old: body, now, del: { text: body.slice(a, b), pre: body.slice(Math.max(0, a - 15), a) } });
+  return shown;
+}
+// 要点・くわしくはその行だけ消し、題にある予定・項目は☑を外す。メモの題は変えない
+function ckDelRest(word, list) {
+  const cut = (t) => t.split("\n").filter((l) => !l.includes(word)).join("\n");
+  ckChange(list, "summary", cut(ckGet("summary")));
+  draft.memo.items.forEach((it, i) => { if (it.title.includes(word)) ckChange(list, `items.${i}.on`, false); else ckChange(list, `items.${i}.detail`, cut(it.detail || "")); });
+  draft.memo.events.forEach((ev, i) => { if (ev.title.includes(word)) ckChange(list, `events.${i}.on`, false); else ckChange(list, `events.${i}.note`, cut(ev.note || "")); });
+}
+// 決定前に、まだ残っている場所の名前
+function ckRest(word) {
+  if (word.length < 2) return [];
+  const m = draft.memo, r = [];
+  if (m.summary.some((l) => l.includes(word))) r.push("要点");
+  if (m.items.some((x) => x.on && (x.title + (x.detail || "")).includes(word))) r.push("仕分け");
+  if (m.events.some((x) => x.on && (x.title + (x.note || "")).includes(word))) r.push("予定");
+  return r;
+}
 function ckHtml(c) {
   const d = draft.memo.ck?.[c.raw];
   if (d) return `<div class="ck done" data-raw="${esc(c.raw)}"><div class="q">✓ ${esc(c.word)}</div><div class="res">${esc(d.label)}</div>${draft.saved ? "" : '<div class="acts"><button data-a="undo">やり直す</button></div>'}</div>`;
@@ -1078,8 +1127,13 @@ function ckHtml(c) {
   for (const x of c.dates.slice(1)) acts += `<button data-a="date" data-v="${x}" class="${t && t.to === x ? "picked" : ""}">${md(x)}にする</button>`;
   acts += `<button data-a="own">自分で直す</button>`;
   if (c.cands.length === 0 && c.dates.length === 0) acts = `<button class="main" data-a="ok">このままでよい</button><button data-a="own">自分で直す</button>`;
+  if (t?.kind === "del" || ckSentence(draft.memo.body || "", c.word) || ckRest(c.word).length) acts += `<button data-a="del" class="${t?.kind === "del" ? "picked" : ""}">消す</button>`;
   let extra = "";
-  if (t && t.kind === "own") extra = `<input type="text" class="ckown" value="${esc(t.text ?? c.word)}" aria-label="直す言葉"><div class="ckdecide"><span class="t">書き換えて「決定」(本文・仕分けなどの同じ言葉も変わります)</span><button class="main" data-a="ownok">決定</button><button data-a="cancel">やめる</button></div>`;
+  if (t && t.kind === "del") {
+    const rest = t.rest ? [] : ckRest(c.word);
+    extra = `<div class="ckdecide"><span class="t">${t.text ? `本文から仮に消しました：${esc(t.text)}` : "仮に消しました"}${t.rest ? `<br>${esc(ckWhere(t.list.filter((x) => x.id !== "body")))}${t.text ? "からも" : "から"}仮に消しました(名前に入っている予定・項目は☑を外しました)` : ""}</span>` +
+      `<button class="main" data-a="decide">決定</button>${rest.length ? `<button data-a="delrest">${esc(rest.join("・"))}からも消す</button>` : ""}<button data-a="cancel">やめる</button></div>`;
+  } else if (t && t.kind === "own") extra = `<input type="text" class="ckown" value="${esc(t.text ?? c.word)}" aria-label="直す言葉"><div class="ckdecide"><span class="t">書き換えて「決定」(本文・仕分けなどの同じ言葉も変わります)</span><button class="main" data-a="ownok">決定</button><button data-a="cancel">やめる</button></div>`;
   else if (t) extra = `<div class="ckdecide"><span class="t">${esc(ckWhere(t.list))}を仮に直しました</span><button class="main" data-a="decide">決定</button><button data-a="cancel">やめる</button></div>`;
   return `<div class="ck sel" data-raw="${esc(c.raw)}">${head}<div class="acts">${acts}</div>${extra}</div>`;
 }
@@ -1104,7 +1158,7 @@ $("checks").addEventListener("click", (e) => {
   const box = e.target.closest(".ck"); if (!box || !draft.memo || draft.saved) return;
   const raw = box.dataset.raw, a = e.target.dataset.a;
   readMemoFields(); // 手で直した欄を先に取り込む
-  if (["cand", "date", "ok", "own"].includes(a)) ckCancel(); // 仮の直しを戻してから読む
+  if (["cand", "date", "ok", "own", "del"].includes(a)) ckCancel(); // 仮の直しを戻してから読む
   const c = ckParse(raw);
   if (!a) { if (!draft.memo.ck?.[raw] && ckSel !== raw) { ckCancel(); ckSel = raw; ckRefresh(); } return; }
   if (a === "undo") { ckCancel(); ckBack(draft.memo.ck[raw].changes || []); delete draft.memo.ck[raw]; ckSel = raw; ckRefresh(); return; }
@@ -1114,6 +1168,12 @@ $("checks").addEventListener("click", (e) => {
   if (a === "cand") { ckCancel(); const l = [], to = e.target.dataset.v; ckReplaceAll(c.word, to, l); ckTry = { raw, to, list: l }; ckRefresh(); return; }
   if (a === "date") { ckCancel(); const to = e.target.dataset.v, l = ckDateTry(c, to); ckTry = { raw, to, date: true, list: l }; ckRefresh(); return; }
   if (a === "own") { ckCancel(); ckTry = { raw, kind: "own", list: [] }; ckRefresh(); $("checks").querySelector(".ckown")?.focus(); return; }
+  if (a === "del") {
+    const l = [], text = ckDelBody(c.word, l), only = !text;
+    if (only) ckDelRest(c.word, l); // 本文になければ、ほかの場所から
+    ckTry = { raw, kind: "del", list: l, text, rest: only }; ckRefresh(); return;
+  }
+  if (a === "delrest") { if (ckTry?.kind === "del" && ckTry.raw === raw) { ckDelRest(c.word, ckTry.list); ckTry.rest = true; } ckRefresh(); return; }
   if (a === "ownok") {
     const v = ($("checks").querySelector(".ckown")?.value || "").trim(); if (!v) return;
     const l = []; ckReplaceAll(c.word, v, l); ckUnmark(v, l); ckTry = null;
@@ -1121,6 +1181,7 @@ $("checks").addEventListener("click", (e) => {
   }
   if (a === "decide") {
     const t = ckTry, l = t.list;
+    if (t.kind === "del") { ckDone(c, `消した(${ckWhere(l)})`, l); return; }
     if (t.date) { const shown = t.to !== c.dates[0] ? md(t.to) : c.word; ckUnmark(shown, l); ckDone(c, `${md(t.to)}にした(${ckWhere(l)})`, l); }
     else { ckUnmark(t.to, l); ckDone(c, `「${t.to}」に直した(${ckWhere(l)})`, l); }
     return;
