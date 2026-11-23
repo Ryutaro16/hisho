@@ -372,7 +372,7 @@
   .month summary { color:var(--ink); cursor:pointer; font-size:14px; }
   .month h5 { margin:8px 0 2px; font-size:13px; color:var(--ink); }
   .month div span:last-child { white-space:nowrap; }
-  #exportCsv { width:100%; margin-top:10px; }
+  #exportCsv, #exportEval { width:100%; margin-top:10px; }
   a.costrow { box-sizing:border-box; min-height:44px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:inherit; text-decoration:none; }
   .costrow { display:flex; justify-content:space-between; align-items:center; width:100%; text-align:left; margin-top:16px; padding:12px; font-size:16px; }
   .costrow small { color:var(--sub); font-size:13px; margin-left:4px; } .costrow .go { color:var(--sub); }
@@ -628,6 +628,12 @@
       <p class="muted">秘書のLINEを友だち追加して1通送った人がここに出ます。「妻」の文は依頼として記録し、「自分」には新しい依頼と毎日18時の「帰りに」を知らせます。</p>
     </div>
     <div class="usage-box">
+      <b>📊 まとめの分析用の記録</b>
+      <p class="muted">保存したメモについて、AIの最初の答えと、直したあとの両方を記録しています(文字起こし・要確認で選んだこと・待ち時間・金額なども)。保存せずに消した話は記録しません。メモを消すと、その記録も消えます。</p>
+      <button id="exportEval">分析用の記録をCSVで書き出す</button>
+      <p class="muted">話した内容がそのまま入っています。人に渡したり、公開の場所に置いたりしないでください。</p>
+    </div>
+    <div class="usage-box">
       <b>🗑 ゴミ箱(消したものを30日間残します)</b>
       <div id="trashList"></div>
       <p class="muted">データ全体は毎晩Macに書き出し、iCloud Driveにも保管しています。</p>
@@ -700,7 +706,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "7be5ab1a2b07475b3149a3b209d097c8c109c4e2";
+const BUILD = "5f25a8456d8d34c678a146b0da43eb2d80c756a9";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -734,6 +740,8 @@ if (settings.sttDef !== 2) { settings = { ...settings, stt: "openai", sttDef: 2 
 const sttNow = () => (settings.stt === "groq" ? "groq" : "openai");
 // 書きかけ:話した内容・話し始めた日時・まとめ(予定と仕分けは on で選ぶ)・保存結果
 const emptyDraft = () => ({ input: "", startedAt: null, memo: null, meta: "", saved: null, stt: 0, how: { methods: [], mics: [] } });
+// 詳しい記録(まとめの改良のため。保存したときだけサーバーに送る):segs=区切りごとの文字起こし、runs=まとめた回ごとの答え、acts=要確認で選んだこと
+const evOf = () => { const e = (draft.ev ||= {}); e.segs ||= []; e.runs ||= []; e.acts ||= []; return e; };
 // このメモをどの方式で入れたか(保存するとメモに残る)。OpenAI・Groq・0円(iPhone)・音声ファイル・手入力(キーボードの音声入力を含む)
 function noteHow(method, mic) {
   const h = (draft.how ||= { methods: [], mics: [] });
@@ -1041,7 +1049,8 @@ function ckWhere(list) {
 }
 // まとめ直したり消したりして別のメモになっていたら、前のメモの仮の直しは捨てる(今のメモに当てはめない)
 function ckCancel() { if (ckTry && ckTry.memo === draft.memo && ckTry.list) ckBack(ckTry.list); ckTry = null; }
-function ckDone(c, label, list) {
+function ckDone(c, label, list, act) {
+  evOf().acts.push({ at: Date.now(), word: c.word, why: c.why, cands: c.cands, dates: c.dates, act, label });
   ckState()[c.raw] = { label, changes: list };
   ckTry = null;
   const left = draft.memo.needs_check.filter((r) => !draft.memo.ck[r]);
@@ -1161,10 +1170,10 @@ $("checks").addEventListener("click", (e) => {
   if (["cand", "date", "ok", "own", "del"].includes(a)) ckCancel(); // 仮の直しを戻してから読む
   const c = ckParse(raw);
   if (!a) { if (!draft.memo.ck?.[raw] && ckSel !== raw) { ckCancel(); ckSel = raw; ckRefresh(); } return; }
-  if (a === "undo") { ckCancel(); ckBack(draft.memo.ck[raw].changes || []); delete draft.memo.ck[raw]; ckSel = raw; ckRefresh(); return; }
+  if (a === "undo") { evOf().acts.push({ at: Date.now(), word: c.word, act: "undo", label: draft.memo.ck[raw].label }); ckCancel(); ckBack(draft.memo.ck[raw].changes || []); delete draft.memo.ck[raw]; ckSel = raw; ckRefresh(); return; }
   if (a === "ok") { ckCancel(); const l = []; ckUnmark(c.word, l);
     if (c.dates.length) { const i = draft.memo.events.findIndex((x) => x.unsure && x.date === c.dates[0]); if (i >= 0) ckChange(l, `events.${i}.unsure`, ""); }
-    ckDone(c, "このまま", l); return; }
+    ckDone(c, "このまま", l, "ok"); return; }
   if (a === "cand") { ckCancel(); const l = [], to = e.target.dataset.v; ckReplaceAll(c.word, to, l); ckTry = { raw, to, list: l }; ckRefresh(); return; }
   if (a === "date") { ckCancel(); const to = e.target.dataset.v, l = ckDateTry(c, to); ckTry = { raw, to, date: true, list: l }; ckRefresh(); return; }
   if (a === "own") { ckCancel(); ckTry = { raw, kind: "own", list: [] }; ckRefresh(); $("checks").querySelector(".ckown")?.focus(); return; }
@@ -1177,13 +1186,13 @@ $("checks").addEventListener("click", (e) => {
   if (a === "ownok") {
     const v = ($("checks").querySelector(".ckown")?.value || "").trim(); if (!v) return;
     const l = []; ckReplaceAll(c.word, v, l); ckUnmark(v, l); ckTry = null;
-    ckDone(c, `「${v}」に直した(${ckWhere(l)})`, l); return;
+    ckDone(c, `「${v}」に直した(${ckWhere(l)})`, l, "own"); return;
   }
   if (a === "decide") {
     const t = ckTry, l = t.list;
-    if (t.kind === "del") { ckDone(c, `消した(${ckWhere(l)})`, l); return; }
-    if (t.date) { const shown = t.to !== c.dates[0] ? md(t.to) : c.word; ckUnmark(shown, l); ckDone(c, `${md(t.to)}にした(${ckWhere(l)})`, l); }
-    else { ckUnmark(t.to, l); ckDone(c, `「${t.to}」に直した(${ckWhere(l)})`, l); }
+    if (t.kind === "del") { ckDone(c, `消した(${ckWhere(l)})`, l, "del"); return; }
+    if (t.date) { const shown = t.to !== c.dates[0] ? md(t.to) : c.word; ckUnmark(shown, l); ckDone(c, `${md(t.to)}にした(${ckWhere(l)})`, l, "date"); }
+    else { ckUnmark(t.to, l); ckDone(c, `「${t.to}」に直した(${ckWhere(l)})`, l, "cand"); }
     return;
   }
   if (a === "cancel") { ckCancel(); ckRefresh(); }
@@ -1267,6 +1276,9 @@ function run() {
     const start = new Date(draft.startedAt || Date.now());
     const data = await post("/api/summarize", { text, date: dateLabel(start), model: settings.model || "opus" });
     const m = data.memo;
+    const ev = evOf();
+    ev.runs.push({ at: Date.now(), key: settings.model || "opus", model: data.label, actual: data.actual, ver: data.promptVer, inTok: data.tokens?.in, outTok: data.tokens?.out, sec: data.sec, yen: data.yen, input: text, ai: JSON.parse(JSON.stringify(m)) });
+    ev.acts = []; // 要確認で選んだことは、最後のまとめの分だけ
     // 予定・項目は最初はすべて ☑(確信のない予定もそのまま。確認の印を出す)
     m.events = m.events.map((e) => ({ ...e, on: true }));
     m.items = m.items.map((it) => ({ ...it, on: true }));
@@ -1287,7 +1299,9 @@ function save() {
     const events = m.events.filter((e) => e.on && e.title.trim() && e.date).map(({ on, unsure, ...e }) => e);
     const items = m.items.filter((it) => it.on && it.title.trim()).map(({ on, ...it }) => it);
     const memo = { title: m.title, summary: m.summary, body: m.body, tags: m.tags, needs_check: m.needs_check.map(ckForSave) };
-    const data = await post("/api/save", { memo, how: draft.how, said: draft.input, iso: isoLocal(new Date(draft.startedAt || Date.now())), events, items });
+    const E = evOf(), fin = JSON.parse(JSON.stringify({ title: m.title, summary: m.summary, body: m.body, tags: m.tags, items: m.items, events: m.events }));
+    const ev = { v: 1, build: BUILD.slice(0, 8), segs: E.segs, runs: E.runs, acts: E.acts, savedAt: Date.now(), left: m.needs_check.filter((r) => !m.ck?.[r]), final: { ...fin, checks: m.needs_check.length } };
+    const data = await post("/api/save", { ev, memo, how: draft.how, said: draft.input, iso: isoLocal(new Date(draft.startedAt || Date.now())), events, items });
     draft.saved = { events: data.events, items: data.items, warn: data.warn || "" };
     if (draft.mood) await post("/api/mood", { mood: draft.mood, date: ymd(new Date(draft.startedAt || Date.now())), memoId: data.memoId }).catch(() => {});
     saveDraft();
@@ -1588,7 +1602,7 @@ async function sendQueue() {
       const wav = await remakeWav(blob);
       if (wav) ({ data, err } = await sendOne(wav));
       // 作り直してもだめなら、その区切りだけ飛ばして次へ(1つの区切りで後ろが全部止まらないように)
-      if (!data) { queue.shift(); skipCount++; recInfo(); continue; }
+      if (!data) { queue.shift(); skipCount++; evOf().segs.push({ skip: 1 }); recInfo(); continue; }
     }
     queue.shift();
     if (!data) { failed.push(blob, ...queue); queue = []; $("retryBtn").hidden = false; setStatus("文字起こしに失敗しました:" + err, "err"); break; }
@@ -1597,6 +1611,7 @@ async function sendQueue() {
       input.value = draft.input; $("count").textContent = draft.input.length + "字"; toLatest();
     }
     noteHow(blob.file ? "音声ファイル(" + (data.stt === "groq" ? "Groq" : "OpenAI") + ")" : data.stt === "groq" ? "Groq" : "OpenAI", blob.file ? "" : micName);
+    evOf().segs.push({ t: data.text || "", a: data.audioSec, w: data.sec, y: data.yen, s: data.stt, f: blob.file ? 1 : 0 });
     doneCount++; draft.stt = (draft.stt || 0) + (data.yen || 0); saveDraft();
     recInfo();
   }
@@ -3100,10 +3115,8 @@ async function loadUsage() {
 }
 
 // CSVの書き出し。iPhoneは共有シート(ファイルに保存・AirDrop・メール)、Macはダウンロード
-$("exportCsv").onclick = async () => {
-  let csv;
-  try { csv = (await post("/api/usage", { action: "csv" })).csv; } catch (e) { toast("書き出せませんでした:" + e.message); return; }
-  const d = new Date(), name = `秘書アプリ_使った記録_${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}.csv`;
+async function shareCsv(csv, label) {
+  const d = new Date(), name = `秘書アプリ_${label}_${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}.csv`;
   const file = new File([csv], name, { type: "text/csv" });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try { await navigator.share({ files: [file] }); } catch { /* 閉じただけ */ }
@@ -3112,7 +3125,14 @@ $("exportCsv").onclick = async () => {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-};
+}
+async function exportCsv(path, body, label) {
+  let csv;
+  try { csv = (await post(path, body)).csv; } catch (e) { toast("書き出せませんでした:" + e.message); return; }
+  await shareCsv(csv, label);
+}
+$("exportCsv").onclick = () => exportCsv("/api/usage", { action: "csv" }, "使った記録");
+$("exportEval").onclick = () => exportCsv("/api/eval", {}, "分析用の記録");
 
 // 個人の設定を入れる。控えがあれば先に使い、サーバーから読めたら(変わっていれば)入れ直して今の画面を描き直す
 function applyProfile(p) {
