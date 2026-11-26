@@ -262,6 +262,14 @@
   .cal .d .e.fam { color:#1e7d4f; }
   .cal .d .e.task { color:#0b6bcb; }
   .cal .d .e.task.done { color:#999; text-decoration:line-through; }
+  .cal .d .e.evdone, .cal .band.evdone, .cl-evs .evdone { opacity:.38; }
+  .dayev.evrow { display:flex; gap:10px; align-items:center; }
+  .dayev.evrow > span { flex:1; min-width:0; }
+  .evck { width:30px; height:30px; flex:none; border-radius:50%; border:2px solid var(--sub); background:none; padding:0; font-size:16px; font-weight:700; color:#fff; line-height:1; }
+  .evdone .evck { background:var(--ok); border-color:var(--ok); }
+  .dayev.evdone b, .dayev.evdone small { opacity:.42; }
+  .tdev .evck { width:22px; height:22px; font-size:12px; border-width:1.5px; margin-top:1px; }
+  .tdev.evdone time, .tdev.evdone span { opacity:.42; }
   .dayev.task { display:flex; gap:10px; align-items:center; }
   .dayev.task input { width:22px; height:22px; flex:none; accent-color:var(--acc); }
   .dayev.task.done b { text-decoration:line-through; color:var(--sub); }
@@ -746,7 +754,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "4d42da34780e4c9ebb54a96f284073996bee9496";
+const BUILD = "701ffce0e8796f663ea52c8744d5c4a9cd1017f3";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -2503,10 +2511,41 @@ var todayFetchedAt = 0;
 function todayLines(data, day) {
   const hol = (data.holidays || []).filter((h) => h.date === day).map((h) => h.title);
   const evs = (data.events || []).filter((e) => e.date <= day && (e.end_date || e.date) >= day)
-    .map((e) => ({ tm: e.start && e.date === day ? e.start : "", title: e.title, fam: !!e.calName }))
+    .map((e) => ({ tm: e.start && e.date === day ? e.start : "", title: e.title, fam: !!e.calName, ev: e, done: evDone(e, data) }))
     .sort((a, b) => a.tm.localeCompare(b.tm));
   const tasks = dayTasks(day, data).filter((t) => !t.done).map((t) => ({ title: t.title, task: true }));
   return { hol, items: [...evs, ...tasks] };
+}
+// ---- 予定の完了(2026-11-26)。○を押すと✓になり薄くなる。印は秘書アプリのサーバーだけ(Googleカレンダーは変えない) ----
+let todayItems = [];
+const evKey = (e) => `${e.id}|${e.date}`;
+const evDone = (e, data = calData) => !!e && (data.done || []).includes(evKey(e));
+async function toggleEvDone(e, data = calData) {
+  if (!e) return;
+  const k = evKey(e), on = !evDone(e, data);
+  try { await post("/api/calendar", { action: "done", key: k, date: e.date, title: e.title, done: on }); }
+  catch (err) { alert(err.message); return; }
+  const flip = (l) => (on ? [...new Set([...(l || []), k])] : (l || []).filter((x) => x !== k));
+  // この端末の控え(月ごと)も直す。前後の月に同じ予定が入っていることもあるので全部見る
+  for (const sk of Object.keys(localStorage)) {
+    if (!sk.startsWith("hisho:cal:")) continue;
+    const d = store.get(sk);
+    if (d && (d.events || []).some((x) => evKey(x) === k)) { d.done = flip(d.done); store.set(sk, d); }
+  }
+  calData.done = flip(calData.done);
+  if (data !== calData) data.done = flip(data.done);
+  if (!$("pageCal").hidden) renderCal();
+  if ($("dayDlg").open) openDay(dayOpen);
+  if (!$("pageHome").hidden) loadToday();
+  if (on && CATEGORIES.includes("やったこと")) toast("完了にしました", { label: "📖 やったことに残す", run: () => keepDone(e) });
+  else toast(on ? "完了にしました" : "未完了に戻しました");
+}
+// 完了にした予定を「やったこと」の記録に残す(一言はなくてもよい)。記録の日はその予定の日
+async function keepDone(e) {
+  const note = prompt(`「${e.title}」をやったことに残します。一言(なくてもよい)`, "");
+  if (note === null) return;
+  try { await post("/api/item", { action: "add", item: { category: "やったこと", title: e.title, detail: note.trim(), item_date: e.date } }); toast("やったことに残しました"); }
+  catch (err) { alert(err.message); }
 }
 function renderToday(data, state = "") {
   const t = todayStr(), tm = addDays(t, 1), wd = (s) => WEEK[new Date(s + "T00:00:00").getDay()];
@@ -2516,8 +2555,9 @@ function renderToday(data, state = "") {
   if (!data) body = `<div class="empty">${state === "error" ? "予定を読み込めませんでした" : "読み込み中…"}</div>`;
   else {
     const { hol, items } = todayLines(data, t), MAX = 3;
+    todayItems = items.map((x) => ({ ...x, data }));
     body = hol.map((h) => `<div class="tdhol">${esc(h)}</div>`).join("") +
-      items.slice(0, MAX).map((x) => `<div class="tdev${x.fam ? " fam" : ""}${x.task ? " task" : ""}"><time>${x.task ? "☐" : x.tm || "終日"}</time><span>${esc(x.title)}</span></div>`).join("") +
+      items.slice(0, MAX).map((x, i) => `<div class="tdev${x.fam ? " fam" : ""}${x.task ? " task" : ""}${x.done ? " evdone" : ""}">${x.ev ? `<button class="evck" data-ti="${i}" aria-label="${x.done ? "完了を外す" : "完了にする"}">${x.done ? "✓" : ""}</button>` : ""}<time>${x.task ? "☐" : x.tm || "終日"}</time><span>${esc(x.title)}</span></div>`).join("") +
       (items.length > MAX ? `<div class="tdmore">ほか${items.length - MAX}件</div>` : "") +
       (!items.length ? `<div class="empty">今日の予定はありません</div>` : "");
     const nx = todayLines(data, tm), next = [...nx.hol, ...nx.items.map((x) => x.title)];
@@ -2536,7 +2576,9 @@ async function loadToday() {
   try { renderToday(calView(await fetchCal(month))); }
   catch { todayFetchedAt = 0; renderToday(cached && calView(cached), "error"); }
 }
-$("homeToday").addEventListener("click", () => {
+$("homeToday").addEventListener("click", (e) => {
+  const ck = e.target.closest(".evck");
+  if (ck) { const x = todayItems[+ck.dataset.ti]; if (x?.ev) toggleEvDone(x.ev, x.data); return; }
   const d = new Date();
   calMonth = new Date(d.getFullYear(), d.getMonth(), 1); // 押したときだけ今月にする(カレンダーの「今月」と同じ)
   showPage("pageCal");
@@ -2730,7 +2772,7 @@ function renderCal() {
       let lane = lanes.findIndex((end) => end < c0);
       if (lane < 0) { lane = lanes.length; lanes.push(-1); }
       lanes[lane] = c1;
-      bands.push(`<div class="band" style="left:calc(${c0} * 100% / 7 + 2px);width:calc(${c1 - c0 + 1} * 100% / 7 - 4px);top:${21 + lane * 16}px">${esc(e.title)}</div>`);
+      bands.push(`<div class="band${evDone(e) ? " evdone" : ""}" style="left:calc(${c0} * 100% / 7 + 2px);width:calc(${c1 - c0 + 1} * 100% / 7 - 4px);top:${21 + lane * 16}px">${esc(e.title)}</div>`);
     }
     const lineH = 15.2, room = Math.max(0, Math.floor((cellH - 22 - lanes.length * 16) / lineH));
     let cells = "";
@@ -2739,7 +2781,7 @@ function renderCal() {
       const cls = ["d", dt.getMonth() !== month ? "out" : "", dt.getDay() === 0 ? "sun" : "", dt.getDay() === 6 ? "sat" : "", hol[day] ? "hol" : "", day === today ? "today" : ""].filter(Boolean).join(" ");
       const lines = [];
       if (hol[day]) lines.push(`<div class="h">${esc(hol[day])}</div>`);
-      for (const e of single.filter((e) => e.date === day)) lines.push(`<div class="e${e.calName ? " fam" : ""}">${esc(e.title)}</div>`);
+      for (const e of single.filter((e) => e.date === day)) lines.push(`<div class="e${e.calName ? " fam" : ""}${evDone(e) ? " evdone" : ""}">${esc(e.title)}</div>`);
       for (const t of dayTasks(day)) lines.push(`<div class="e task${t.todo ? " todo" : ""}${t.done ? " done" : ""}">${t.done ? "☑" : "☐"}${esc(t.title)}</div>`);
       const shown = lines.length <= room ? lines : room <= 1 ? lines.slice(0, 1) : lines.slice(0, room - 1).concat(`<div class="more">ほか${lines.length - room + 1}件</div>`);
       const wk = dt.getMonth() === month ? workOf(day) : { place: "" }; // ほかの月の日には出さない
@@ -3023,7 +3065,7 @@ function renderCalList() {
       const multi = e.end_date && e.end_date > e.date;
       if (multi && e.date !== day && day !== first) continue;
       const tm = multi ? `〜${md(e.end_date)}` : e.start ? e.start : "";
-      lines.push(`<div class="${e.calName ? "fam" : ""}">${tm ? `<span class="tm">${esc(tm)}</span>` : ""}${esc(e.title)}</div>`);
+      lines.push(`<div class="${e.calName ? "fam" : ""}${evDone(e) ? " evdone" : ""}">${evDone(e) ? "✓ " : ""}${tm ? `<span class="tm">${esc(tm)}</span>` : ""}${esc(e.title)}</div>`);
     }
     for (const t of tasks) lines.push(`<div class="task${t.todo ? " todo" : ""}${t.done ? " done" : ""}">${t.done ? "☑" : "☐"} ${esc(t.title)}</div>`);
     if (!lines.length) continue;
@@ -3049,12 +3091,16 @@ function openDay(day) {
   const evs = calData.events.filter((e) => e.date <= day && (e.end_date || e.date) >= day).sort((a, b) => (a.start || "").localeCompare(b.start || ""));
   const tasks = dayTasks(day);
   $("dayList").innerHTML = hol.map((h) => `<div class="dayev"><b class="h">${esc(h.title)}</b><small>祝日</small></div>`).join("") +
-    (evs.length ? evs.map((e) => `<div class="dayev${e.both ? " fam" : ""}" data-id="${esc(e.id)}"><b>${e.repeat ? "🔁 " : ""}${esc(e.title)}</b><small>${esc([timeText(e), e.both ? "自分・家族の両方に入っています" : e.calName && "📗" + e.calName, e.same > 1 && `同じ予定が${e.same}つ入っています(Googleカレンダーで片方を消せます)`, e.place && "📍" + e.place, e.note].filter(Boolean).join("・"))}</small></div>`).join("") : hol.length || tasks.length ? "" : `<div class="muted" style="padding:10px 0">予定はありません</div>`) +
+    (evs.length ? evs.map((e) => `<div class="dayev evrow${e.both ? " fam" : ""}${evDone(e) ? " evdone" : ""}" data-id="${esc(e.id)}"><button class="evck" aria-label="${evDone(e) ? "完了を外す" : "完了にする"}">${evDone(e) ? "✓" : ""}</button><span><b>${e.repeat ? "🔁 " : ""}${esc(e.title)}</b><small>${esc([timeText(e), e.both ? "自分・家族の両方に入っています" : e.calName && "📗" + e.calName, e.same > 1 && `同じ予定が${e.same}つ入っています(Googleカレンダーで片方を消せます)`, e.place && "📍" + e.place, e.note].filter(Boolean).join("・"))}</small></span></div>`).join("") : hol.length || tasks.length ? "" : `<div class="muted" style="padding:10px 0">予定はありません</div>`) +
     tasks.map((t) => `<label class="dayev task${t.todo ? " todo" : ""}${t.done ? " done" : ""}" data-task="${esc(t.id)}"${t.todo ? " data-todo" : ""}><input type="checkbox" ${t.done ? "checked" : ""}><span><b>${esc(t.title)}</b><small>${t.todo ? (t.gtask ? "ToDo(Googleのタスクにも入っています)" : "ToDo") : "Googleのタスク" + (t.note ? "・" + esc(t.note) : "")}</small></span></label>`).join("");
   if (!$("dayDlg").open) $("dayDlg").showModal();
 }
 $("calGrid").addEventListener("click", (e) => { const c = e.target.closest(".d"); if (c) openDay(c.dataset.day); });
-$("dayList").addEventListener("click", (e) => { const r = e.target.closest(".dayev[data-id]"); if (r) openEvent(calData.events.find((x) => x.id === r.dataset.id)); });
+$("dayList").addEventListener("click", (e) => {
+  const r = e.target.closest(".dayev[data-id]"); if (!r) return;
+  const ev = calData.events.find((x) => x.id === r.dataset.id);
+  if (e.target.closest(".evck")) toggleEvDone(ev); else openEvent(ev);
+});
 $("dayList").addEventListener("change", async (e) => {
   const row = e.target.closest(".dayev.task");
   if (!row) return;
