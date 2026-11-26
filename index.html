@@ -685,6 +685,7 @@
       <b>🗑 ゴミ箱(消したものを30日間残します)</b>
       <div id="trashList"></div>
       <p class="muted">データ全体は毎晩Macに書き出し、iCloud Driveにも保管しています。</p>
+      <p class="muted" id="storeInfo"></p>
     </div>
   </div>
 </main>
@@ -754,7 +755,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "701ffce0e8796f663ea52c8744d5c4a9cd1017f3";
+const BUILD = "d8723a2613a1faef1da3f50bf12f9c7a6856af27";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -776,8 +777,38 @@ let CATEGORIES = [], ICON = {}, WORK = {}, PROFILE = null;
 // この端末だけの保存(書きかけと設定)。使えない環境でも動くようにする
 const store = {
   get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
-  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { store.fail = (store.fail || 0) + 1; } },
   del(k) { try { localStorage.removeItem(k); } catch {} },
+};
+// カレンダーの控え(月ごと)は IndexedDB に置く(2026-11-26)。localStorage は 5MB までで、いっぱいだと控えられず、
+// 開くたびに空のカレンダーで Google の読み込み(3秒ほど)を待つことになるため。読むのは起動時に1回だけ(あとは mem)
+const calStore = {
+  mem: new Map(), db: null, ready: false,
+  async init() {
+    try {
+      this.db = await new Promise((ok, ng) => { const r = indexedDB.open("hisho", 1); r.onupgradeneeded = () => r.result.createObjectStore("cal"); r.onsuccess = () => ok(r.result); r.onerror = () => ng(r.error); });
+      const all = await new Promise((ok, ng) => {
+        const os = this.db.transaction("cal").objectStore("cal"), ks = os.getAllKeys(), vs = os.getAll();
+        vs.onsuccess = () => ok(ks.result.map((k, i) => [k, vs.result[i]])); vs.onerror = () => ng(vs.error);
+      });
+      for (const [k, v] of all) if (!this.mem.has(k)) this.mem.set(k, v);
+    } catch { this.db = null; }
+    // 前の版は localStorage に控えていた。移して、localStorage からは消す(場所を空ける)
+    for (const k of Object.keys(localStorage)) {
+      if (!k.startsWith("hisho:cal:")) continue;
+      const v = store.get(k);
+      if (v && !this.mem.has(k)) this.set(k, v);
+      if (this.db) store.del(k);
+    }
+    this.ready = true;
+  },
+  get(k) { return this.mem.has(k) ? this.mem.get(k) : store.get(k); },
+  set(k, v) {
+    this.mem.set(k, v);
+    if (!this.db) { store.set(k, v); return; }
+    try { this.db.transaction("cal", "readwrite").objectStore("cal").put(JSON.parse(JSON.stringify(v)), k); } catch { this.fail = (this.fail || 0) + 1; }
+  },
+  keys() { return [...new Set([...this.mem.keys(), ...Object.keys(localStorage).filter((k) => k.startsWith("hisho:cal:"))])]; },
 };
 // 音声カルテ・音声メモと同じ住所(ryutaro16.github.io)なので、名前に「hisho:」を付けて分ける。
 // 合言葉は同じなので、まだ入れていなければ音声メモ・音声カルテで入れたものを使う
@@ -838,6 +869,7 @@ function showPage(page, fromPop = false) {
   if (page === "pageNote") loadNote();
   if (page === "pageMemo") loadMemos();
   if (page === "pageMorning") { loadReport(listenDate || undefined); loadWeather(); loadLeave(); } // 聞いている日があればその日のまま
+  if (page === "pageSet") showStoreInfo();
   if (page === "pageSet") { $("pass").value = settings.pass || ""; $("api").value = settings.api || ""; $("device").value = settings.device || ""; $("clearMin").value = String(settings.clearMin ?? 60); $("aiModel").value = settings.model || "opus"; $("sttPick").value = sttNow(); loadUsage(); loadTrash(); loadLineUsers(); }
   if (page === "pageSpeak") requestAnimationFrame(growAll);
   if (page === "pageCost") { TAB_OF.pageCost = TAB_OF.pageSet; renderCost(); }
@@ -2516,6 +2548,12 @@ function todayLines(data, day) {
   const tasks = dayTasks(day, data).filter((t) => !t.done).map((t) => ({ title: t.title, task: true }));
   return { hol, items: [...evs, ...tasks] };
 }
+// この端末の保存のようす(カレンダーの控えの月数・保存に失敗した回数)
+function showStoreInfo() {
+  let ls = 0; try { for (const k of Object.keys(localStorage)) ls += (localStorage.getItem(k) || "").length; } catch {}
+  $("storeInfo").textContent = `この端末の控え:カレンダー${calStore.keys().length}か月分(${calStore.db ? "IndexedDB" : "localStorage"})・localStorage 約${Math.round(ls / 1024)}KB` +
+    (store.fail || calStore.fail ? `・保存の失敗 ${(store.fail || 0) + (calStore.fail || 0)}回` : "") + (navigator.serviceWorker?.controller ? "・画面の控えあり" : "");
+}
 // ---- 予定の完了(2026-11-26)。○を押すと✓になり薄くなる。印は秘書アプリのサーバーだけ(Googleカレンダーは変えない) ----
 let todayItems = [];
 const evKey = (e) => `${e.id}|${e.date}`;
@@ -2527,10 +2565,9 @@ async function toggleEvDone(e, data = calData) {
   catch (err) { alert(err.message); return; }
   const flip = (l) => (on ? [...new Set([...(l || []), k])] : (l || []).filter((x) => x !== k));
   // この端末の控え(月ごと)も直す。前後の月に同じ予定が入っていることもあるので全部見る
-  for (const sk of Object.keys(localStorage)) {
-    if (!sk.startsWith("hisho:cal:")) continue;
-    const d = store.get(sk);
-    if (d && (d.events || []).some((x) => evKey(x) === k)) { d.done = flip(d.done); store.set(sk, d); }
+  for (const sk of calStore.keys()) {
+    const d = calStore.get(sk);
+    if (d && (d.events || []).some((x) => evKey(x) === k)) { d.done = flip(d.done); calStore.set(sk, d); }
   }
   calData.done = flip(calData.done);
   if (data !== calData) data.done = flip(data.done);
@@ -2568,7 +2605,7 @@ function renderToday(data, state = "") {
 }
 async function loadToday() {
   const d = new Date(), month = new Date(d.getFullYear(), d.getMonth(), 1);
-  const key = "hisho:cal:" + calRangeOf(month).start, cached = store.get(key);
+  const key = "hisho:cal:" + calRangeOf(month).start, cached = calStore.get(key);
   renderToday(cached && calView(cached));
   // 月の表は前後の週も読むので、月末の「明日」(来月1日)も今月分に入っている
   if (cached && Date.now() - todayFetchedAt < 60e3) return; // ホームを開くたびにGoogleを読まない(1分に1回まで)
@@ -2805,24 +2842,23 @@ async function fetchCal(month) {
   data.work = work.overrides || {};
   // ToDo と Googleのタスクは同じもの。Googleに入れたToDo(gcal_id「task:リスト:タスク」)は、Googleのタスクの方を出さない(二重にしない)。
   // Googleの側で完了にした・戻したときは、ToDoもそろえる。ToDoを読めなかったときは控えの分を使う
-  data.todos = todo.items ? todo.items.filter((i) => i.due && i.due >= from && i.due <= end).map((i) => ({ id: i.id, title: i.title, date: i.due, done: i.status === "完了", gtask: /^task:[^:]+:(.+)$/.exec(i.gcal_id || "")?.[1] })) : store.get(key)?.todos || [];
+  data.todos = todo.items ? todo.items.filter((i) => i.due && i.due >= from && i.due <= end).map((i) => ({ id: i.id, title: i.title, date: i.due, done: i.status === "完了", gtask: /^task:[^:]+:(.+)$/.exec(i.gcal_id || "")?.[1] })) : calStore.get(key)?.todos || [];
   const linked = new Set(data.todos.map((t) => t.gtask).filter(Boolean));
   for (const t of data.todos) {
     const g = (data.tasks || []).find((x) => x.id === t.gtask);
     if (g && g.done !== t.done) { t.done = g.done; post("/api/item", { action: "update", id: t.id, item: { status: g.done ? "完了" : "未着手" } }).catch(() => {}); }
   }
   data.tasks = (data.tasks || []).filter((x) => !linked.has(x.id));
-  store.set(key, data);
+  calStore.set(key, data);
   return data;
 }
 async function loadCal() {
-  pullTasks();
   const { start } = calRange();
-  const cached = store.get("hisho:cal:" + start);
+  const cached = calStore.get("hisho:cal:" + start);
   if (cached) { calData = calView(cached); }
   else if (calLoaded !== start) calData = { events: [], holidays: [] };
   renderCal();
-  $("calStatus").textContent = cached ? "" : "読み込み中…"; // 控え(前回の表示)があるときは出さない(目障りなだけなので)
+  $("calStatus").textContent = cached ? "↻ 最新を確かめています" : "読み込み中…";
   if (!leaveData) loadLeave();
   try {
     const data = await fetchCal(calMonth);
@@ -2832,6 +2868,7 @@ async function loadCal() {
     if ($("dayDlg").open && dayOpen) openDay(dayOpen); // 日付の画面を開いたまま足したとき、新しい中身で出し直す
     $("calStatus").textContent = data.tasksError ? "Googleのタスクはまだ読めません" : "";
   } catch (e) { $("calStatus").textContent = (cached ? "前回の表示です。" : "") + e.message; }
+  pullTasks();
 }
 function moveMonth(n) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + n, 1); loadCal(); }
 $("calPrev").onclick = () => moveMonth(-1);
@@ -3034,7 +3071,7 @@ $("dayWork").addEventListener("click", async (e) => {
     await post("/api/work", { date: dayOpen, place });
     calData.work = { ...(calData.work || {}) };
     if (place) calData.work[dayOpen] = place; else delete calData.work[dayOpen];
-    store.set("hisho:cal:" + calRange().start, calData);
+    calStore.set("hisho:cal:" + calRange().start, calData);
     renderCal(); renderDayWork(dayOpen); toast(place ? `${md(dayOpen)}を「${place}」にしました` : "自動に戻しました");
   } catch (err) { alert(err.message); }
 });
@@ -3153,7 +3190,6 @@ async function evDo(body, msg, path = "/api/calendar") {
     const r = await post(path, body);
     $("evDlg").close(); toast(msg);
     if (r.warn) alert(r.warn); // ToDoがGoogleのタスクに入らなかったとき
-    for (const k of Object.keys(localStorage)) if (k.startsWith("hisho:cal:")) store.del(k);
     await loadCal();
     if ($("dayDlg").open) openDay(dayOpen);
   } catch (e) { alert(e.message); }
@@ -3396,6 +3432,13 @@ async function loadProfile() {
 }
 applyProfile(store.get("hisho:profile"));
 showPage("pageCal"); // 開いたときはカレンダーから
+calStore.init().then(() => {
+  const k = "hisho:cal:" + calRange().start, c = calStore.get(k);
+  if (!$("pageCal").hidden && c && calLoaded !== calRange().start) { calData = calView(c); renderCal(); if ($("calStatus").textContent === "読み込み中…") $("calStatus").textContent = "↻ 最新を確かめています"; }
+  if (!$("pageHome").hidden) loadToday();
+});
+// 画面そのものを端末に控えて、開いた瞬間に出す(sw.js)
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 loadProfile();
 autoClear();
 render();
