@@ -336,6 +336,22 @@
   .rates button.on, .whys button.on { background:#e8f1fb; color:#0b4f94; border-color:var(--acc); box-shadow:0 0 0 1px var(--acc); }
   .whys { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
   .whys button { font-size:14px; min-height:36px; padding:2px 10px; }
+  .mansort { flex:1; line-height:1.35; }
+  .mansort small { display:block; font-size:12px; color:var(--sub); font-weight:400; }
+  .mrow { padding:10px 0; border-top:1px solid var(--line); }
+  .mrow:first-child { border-top:0; }
+  .mrow > input { width:100%; }
+  .mrow.done > input { font-weight:600; }
+  .mchips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .mchips button { font-size:14px; min-height:36px; padding:2px 10px; border-radius:18px; }
+  .mchips button.on { background:#e8f1fb; color:#0b4f94; border-color:var(--acc); box-shadow:0 0 0 1px var(--acc); font-weight:700; }
+  .mchips button[data-del] { margin-left:auto; color:var(--sub); }
+  .mfound { font-size:13px; color:var(--sub); margin-top:4px; }
+  .mrow .grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:6px; margin-top:6px; }
+  .mrow .grid input { min-width:0; max-width:100%; }
+  .mrow .grid .wide { grid-column:1 / -1; }
+  .mrow label { display:block; font-size:12px; color:var(--sub); }
+  @media (prefers-color-scheme: dark) { .mchips button.on { background:#1f3350; color:#9cc8f5; } }
   .moods { display:flex; gap:6px; }
   .moods button { flex:1; font-size:26px; padding:4px 0; min-height:50px; }
   .moods button.on { background:#e8f1fb; border-color:var(--acc); box-shadow:0 0 0 1px var(--acc); }
@@ -428,6 +444,7 @@
         <button class="main" id="run">まとめて仕分ける</button>
         <button id="clear">消す</button>
       </div>
+      <div class="row-btns"><button id="manual" class="mansort">✍ 自分で仕分ける<small>AIなし・0円。1行に1つ書いて、分野を自分で押す</small></button></div>
       <!-- ふだんは触らない設定なので、小さめ・灰色で控えめに -->
       <label class="ailine" id="aiLine"><span id="aiLbl">節約モード(Sonnet・約2円)</span><input type="checkbox" class="aiswitch" id="aiSave" role="switch"><span id="aiNote"></span></label>
     </section>
@@ -435,6 +452,12 @@
 
     <section id="result" hidden>
       <div class="notice" id="checks" hidden></div>
+      <div class="card" id="manCard" hidden>
+        <div class="sec"><span>✍ 自分で仕分ける</span><small>分野を押す。選ばない行は保存しません</small></div>
+        <div id="manRows"></div>
+        <div class="row-btns"><button id="manAdd">＋ 行を足す</button></div>
+        <div class="hint"><span id="manSum"></span></div>
+      </div>
       <div class="card" id="evCard">
         <div class="sec"><span>📅 予定</span><small>☑ がGoogleカレンダーに入ります</small></div>
         <div id="events"></div>
@@ -723,7 +746,7 @@
 const DEFAULT_API = location.hostname.endsWith("github.io") ? "https://hisho.kinmon-push.workers.dev" : "";
 // 公開した版の印(deploy.sh が公開のときにこの行だけ書き換える)。GitHub Pages は古い版を10分ほど覚えていて、
 // iPhone が前の画面のまま開くことがあるので、開いたとき・画面に戻ったときに最新の版を確かめ、違えば読み直す
-const BUILD = "694b9ed777c4b4d4160c4861e66b57287491b18b";
+const BUILD = "4d42da34780e4c9ebb54a96f284073996bee9496";
 async function checkUpdate() {
   if (BUILD.startsWith("__") || recording || busy || sending || queue.length || !$("listenAudio").paused) return;
   try {
@@ -1225,13 +1248,18 @@ function render() {
   const m = draft.memo;
   $("result").hidden = !m;
   if (m) { fillForm(m); renderChecks(m.needs_check); renderMeta(draft.meta); renderMoodSave(); }
+  const man = !!m?.manual;
+  if (m) { $("evCard").hidden = man; $("itCard").hidden = man; }
+  $("manCard").hidden = !man;
   const saved = !!draft.saved;
   const transcribing = recording || sending || queue.length > 0 || (waitLast && !lastStopped);
   $("save").disabled = saved; $("fileBtn").disabled = saved || recording || srOn; $("run").disabled = saved || transcribing || srOn; $("recBtn").disabled = saved || srOn;
+  $("manual").disabled = saved || transcribing || srOn;
   $("srBtn").hidden = !SR_API; $("srBtn").disabled = saved || recording;
   paintTiles();
   for (const el of $("result").querySelectorAll("input, select, textarea")) el.disabled = saved;
   bodyBox.contentEditable = saved ? "false" : BODY_MODE;
+  if (man) renderManual();
   $("nextRow").hidden = !saved;
   renderRate();
   if (saved) setStatus(savedText(draft.saved), draft.saved.warn ? "err" : "ok");
@@ -1242,8 +1270,9 @@ const RATES = [["◎", "そのまま"], ["○", "少し直した"], ["△", "か
 const RATE_WHY = ["聞き間違い", "予定・日付", "分野の分け方", "抜け", "余計な付け足し", "長すぎ", "短すぎ", "言い回し", "要確認が多い"];
 function renderRate() {
   const id = draft.saved?.memoId, r = draft.rate || { r: "", why: [], note: "" };
-  $("rateCard").hidden = !id;
-  if (!id) return;
+  const off = !id || !!draft.memo?.manual;
+  $("rateCard").hidden = off;
+  if (off) return;
   $("rateBtns").innerHTML = RATES.map(([k, t]) => `<button data-r="${k}" class="${r.r === k ? "on" : ""}" aria-pressed="${r.r === k}"><b>${k}</b><small>${t}</small></button>`).join("");
   $("rateWhy").innerHTML = RATE_WHY.map((w) => `<button data-w="${w}" class="${r.why.includes(w) ? "on" : ""}" aria-pressed="${r.why.includes(w)}">${w}</button>`).join("");
   $("rateMore").hidden = !r.r;
@@ -1305,7 +1334,7 @@ async function post(path, body) {
 let busy = false;
 async function withBusy(label, fn) {
   if (busy) return;
-  busy = true; for (const id of ["run", "save"]) $(id).disabled = true;
+  busy = true; for (const id of ["run", "save", "manual"]) $(id).disabled = true;
   const t0 = Date.now();
   const tick = setInterval(() => setStatus(`${label}… ${Math.round((Date.now() - t0) / 1000)}秒`), 500);
   setStatus(`${label}…`);
@@ -1342,6 +1371,7 @@ function save() {
     if (ckTry) { ckCancel(); ckRefresh(); } // 決定していない仮の直しは戻す(画面も)
     saveDraft();
     const m = draft.memo;
+    if (m.manual) manToMemo(m);
     const events = m.events.filter((e) => e.on && e.title.trim() && e.date).map(({ on, unsure, ...e }) => e);
     const items = m.items.filter((it) => it.on && it.title.trim()).map(({ on, ...it }) => it);
     const memo = { title: m.title, summary: m.summary, body: m.body, tags: m.tags, needs_check: m.needs_check.map(ckForSave) };
@@ -1672,6 +1702,115 @@ function afterRecording() {
   else setStatus("聞き取れませんでした。もう一度録音してください" + skip, "err");
 }
 
+// ---- ✍ 自分で仕分ける(AIなし・0円。2026-11-26)。1行を1件にして、分野は自分で押す。日付・時刻らしい言葉は先に入れておく ----
+const MAN_MAIN = ["予定", "ToDo", "買い物・欲しいもの", "覚えておくこと", "アイデア"];
+const MAN_SHORT = { "買い物・欲しいもの": "買い物", "覚えておくこと": "覚えておく" };
+const manLabel = (c) => (c === "予定" ? "📅" : ICON[c] || "📄") + " " + (MAN_SHORT[c] || c);
+const z2h = (t) => t.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/：/g, ":").replace(/／/g, "/");
+// 「明日」「来週の水曜」「12/3」「14時」「午後3時半」「9:30」などを見つける。見つけた言葉を除いた残りが rest
+function findWhen(raw, base) {
+  const s = z2h(raw), cut = [];
+  const take = (m) => (m && cut.push(m[0]), m);
+  const b = new Date(base + "T00:00:00"), dow = b.getDay();
+  let date = "", m;
+  if ((m = take(s.match(/(\d{4})[-\/年](\d{1,2})[-\/月](\d{1,2})日?/)))) date = `${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
+  else if ((m = take(s.match(/(\d{1,2})[\/月](\d{1,2})日?/)))) {
+    const y = b.getFullYear(); date = `${y}-${pad(+m[1])}-${pad(+m[2])}`;
+    if (date < addDays(base, -60)) date = `${y + 1}-${pad(+m[1])}-${pad(+m[2])}`; // 2か月より前に過ぎた日付は来年のこと
+  }
+  else if ((m = take(s.match(/明後日|あさって/)))) date = addDays(base, 2);
+  else if ((m = take(s.match(/明日|あした/)))) date = addDays(base, 1);
+  else if ((m = take(s.match(/今日|本日|きょう/)))) date = base;
+  else if ((m = take(s.match(/(再来週|来週|今週)?の?([日月火水木金土])曜日?/)))) {
+    const w = WEEK.indexOf(m[2]), mon = (x) => (x + 6) % 7; // 週は月曜はじまり
+    date = !m[1] ? addDays(base, (w - dow + 7) % 7) : addDays(base, mon(w) - mon(dow) + (m[1] === "来週" ? 7 : m[1] === "再来週" ? 14 : 0));
+  }
+  if (date && ymd(new Date(date + "T00:00:00")) !== date) { date = ""; cut.length = 0; } // 13/40 のような日付はなかったことに
+  const times = [];
+  for (const t of s.matchAll(/(午前|午後)?(\d{1,2})(?:時(?!間)(半|(\d{1,2})分)?|:(\d{2}))/g)) {
+    let h = +t[2]; const mi = t[3] === "半" ? 30 : +(t[4] || t[5] || 0);
+    if (t[1] === "午後" && h < 12) h += 12;
+    if (h > 23 || mi > 59) continue;
+    times.push(`${pad(h)}:${pad(mi)}`); cut.push(t[0]);
+    if (times.length === 2) break;
+  }
+  if (!cut.length) return { date: "", start: "", end: "", rest: raw.trim() };
+  let rest = s;
+  for (const c of cut) rest = rest.replace(c, "\u0000");
+  rest = rest.replace(/\u0000(?:から|より|まで|〜|~|-|の|に|は)*/g, " ").replace(/\s+/g, " ").replace(/^[\s、,]+/, "").replace(/[\s、,]+$/, "").trim();
+  return { date, start: times[0] || "", end: times[1] || "", rest: rest || raw.trim() };
+}
+const manRow = (line, base) => ({ t: line, orig: line, c: "", date: "", start: "", end: "", place: "", due: "", detail: "", w: line ? findWhen(line, base) : {} });
+function manual() {
+  if (recording || sending || queue.length || (waitLast && !lastStopped)) { setStatus("文字起こしが終わるまでお待ちください", "err"); return; }
+  const text = input.value.trim();
+  if (!text) { setStatus("書いた内容がありません。上の欄に1行に1つずつ書いてください", "err"); input.focus(); return; }
+  if (draft.memo && !confirm(draft.memo.manual ? "書いた内容から仕分けを作り直します(選んだ分野は消えます)。よろしいですか?" : "AIのまとめを消して、自分で仕分けます。よろしいですか?")) return;
+  const base = ymd(new Date(draft.startedAt || Date.now()));
+  const lines = text.split("\n").map((l) => l.replace(/^\s*(?:[・\-*•●○◦]|\d+[.)．、])\s*/, "").trim()).filter(Boolean);
+  draft.memo = { manual: true, title: lines[0].slice(0, 60), summary: [], body: text, tags: [], needs_check: [], events: [], items: [], rows: lines.map((l) => manRow(l, base)) };
+  draft.meta = "";
+  noteHow("自分で仕分け");
+  saveDraft(); render();
+  setStatus("1行ずつ分野を押してください。選んでいない行は保存しません", "ok");
+  $("manCard").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function manPick(r, c) {
+  const w = r.w || {}, auto = r.t === r.orig || r.t === w.rest;
+  r.c = c;
+  if (c === "予定") { r.date ||= w.date || ""; if (!r.start) { r.start = w.start || ""; r.end = w.end || ""; } }
+  else if (CHECKABLE.includes(c)) r.due ||= w.date || "";
+  // 見つけた日付・時刻を欄に入れたときは、名前からその言葉を外す(自分で直した名前はそのまま)
+  const strip = c === "予定" ? !!(w.date || w.start) : !!(w.date && CHECKABLE.includes(c));
+  if (auto && w.rest) r.t = strip ? w.rest : r.orig;
+}
+function manSum() {
+  const rows = draft.memo?.rows || [], n = rows.filter((r) => r.c && r.t.trim()).length;
+  $("manSum").textContent = rows.length ? `${n}/${rows.length}件 仕分け済み。分野を選んでいない行は保存しません` : "";
+}
+function renderManual() {
+  const rows = draft.memo.rows, saved = !!draft.saved, cats = ["予定", ...CATEGORIES.filter((c) => c !== "予定")];
+  $("manRows").innerHTML = rows.map((r, i) => {
+    const list = r.more ? cats : cats.filter((c) => MAN_MAIN.includes(c) || c === r.c), w = r.w || {};
+    const found = w.date || w.start ? `<div class="mfound">🕒 ${esc([w.date && md(w.date), w.start && w.start + (w.end ? "〜" + w.end : "")].filter(Boolean).join(" "))} を見つけました${r.c ? "" : "(分野を押すと入ります)"}</div>` : "";
+    const ev = r.c === "予定" ? `<div class="grid"><label>日付<input type="date" data-k="date" value="${esc(r.date)}"></label><label>場所(なくてよい)<input data-k="place" value="${esc(r.place)}"></label><label>開始(空なら終日)<input type="time" data-k="start" value="${esc(r.start)}"></label><label>終了<input type="time" data-k="end" value="${esc(r.end)}"></label></div>` : "";
+    const it = r.c && r.c !== "予定" ? `<div class="grid">${CHECKABLE.includes(r.c) ? `<label class="wide">期限(なくてよい)<input type="date" data-k="due" value="${esc(r.due)}"></label>` : ""}<label class="wide">くわしく(なくてよい)<input data-k="detail" value="${esc(r.detail)}"></label></div>` : "";
+    const more = cats.length > list.length || r.more ? `<button data-more>${r.more ? "たたむ" : "もっと…"}</button>` : "";
+    return `<div class="mrow${r.c ? " done" : ""}" data-i="${i}"><input data-k="t" value="${esc(r.t)}" aria-label="内容" placeholder="内容"><div class="mchips">${list.map((c) => `<button data-c="${esc(c)}" class="${r.c === c ? "on" : ""}" aria-pressed="${r.c === c}">${esc(manLabel(c))}</button>`).join("")}${more}<button data-del aria-label="この行を消す">✕</button></div>${found}${ev}${it}</div>`;
+  }).join("") || `<div class="muted">行がありません。「＋ 行を足す」で足せます</div>`;
+  manSum();
+  for (const el of $("manCard").querySelectorAll("input, button")) el.disabled = saved;
+}
+$("manRows").addEventListener("click", (e) => {
+  const b = e.target.closest("button"), row = e.target.closest(".mrow");
+  if (!b || !row || draft.saved || !draft.memo?.rows) return;
+  const rows = draft.memo.rows, i = +row.dataset.i, r = rows[i];
+  if (b.hasAttribute("data-del")) rows.splice(i, 1);
+  else if (b.hasAttribute("data-more")) r.more = !r.more;
+  else if (b.dataset.c) manPick(r, r.c === b.dataset.c ? "" : b.dataset.c);
+  saveDraft(); renderManual();
+});
+$("manRows").addEventListener("input", (e) => {
+  const k = e.target.dataset.k, row = e.target.closest(".mrow");
+  if (!k || !row || !draft.memo?.rows) return;
+  draft.memo.rows[row.dataset.i][k] = e.target.value; saveDraft();
+  if (k === "t") manSum();
+});
+$("manAdd").onclick = () => {
+  if (!draft.memo?.rows || draft.saved) return;
+  draft.memo.rows.push(manRow("", ymd(new Date(draft.startedAt || Date.now())))); saveDraft(); renderManual();
+  $("manRows").lastElementChild?.querySelector("input")?.focus();
+};
+// 保存の前に、分野を選んだ行を予定・項目にする(話したときのAIの答えと同じ形)
+function manToMemo(m) {
+  const rows = m.rows.filter((r) => r.c && r.t.trim());
+  const noDate = rows.find((r) => r.c === "予定" && !r.date);
+  if (noDate) throw new Error(`「${noDate.t.trim()}」の日付を入れてください(📅 予定は日付が要ります)`);
+  if (!rows.length) throw new Error("分野を押してから保存してください(分野を選んでいない行は保存しません)");
+  m.events = rows.filter((r) => r.c === "予定").map((r) => ({ title: r.t.trim(), date: r.date, end_date: "", start: r.start, end: r.start ? r.end : "", place: r.place.trim(), note: "", repeat: "", on: true }));
+  m.items = rows.filter((r) => r.c !== "予定").map((r) => ({ category: r.c, title: r.t.trim(), detail: r.detail.trim(), due: CHECKABLE.includes(r.c) ? r.due : "", ...(r.c === "買い物・欲しいもの" ? { kind: "買う" } : {}), on: true }));
+}
+$("manual").onclick = manual;
 $("run").onclick = run;
 $("save").onclick = save;
 $("next").onclick = reset;
